@@ -1,2 +1,2 @@
-# pwa-template
-Augy Studios PWA sites template
+# qrcode-maker
+Your offline QR Maker with widget and sharing options.

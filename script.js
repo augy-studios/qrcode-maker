@@ -1,1 +1,1 @@
-// Template
+// QR Maker

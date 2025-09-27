@@ -1,9 +1,9 @@
 {
-    "name": "Template by UwU Apps",
-    "short_name": "UwU Template",
-    "description": "A simple template app; view live template at a glance!",
+    "name": "QR Maker by UwU Apps",
+    "short_name": "UwU QR Maker",
+    "description": "Your offline QR Maker with widget and sharing options.",
     "icons": [{
-        "src": "templateicon1.png",
+        "src": "qrmakericon1.png",
         "type": "image/png",
         "sizes": "512x512"
     }],
