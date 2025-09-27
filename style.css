@@ -33,13 +33,42 @@
 
 :root {
   --brand: #99ff99;
-  --bg: #f7faf8;
-  --card: #ffffff;
-  --ink: #0f1721;
-  --muted: #667085;
-  --ring: rgba(153, 255, 153, 0.5);
-  --ok: #16a34a;
-  --warn: #ea580c;
-  --busy: #b91c1c;
+  --ink: #111827;
+  --bg: #ffffff;
+  --line: #e5e7eb;
+  --ring: rgba(0, 0, 0, .08)
 }
 
+* {
+  box-sizing: border-box
+}
+
+button:focus,
+textarea:focus,
+select:focus,
+input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ring)
+}
+
+.btn:hover {
+  transform: translateY(-1px)
+}
+
+.btn:active {
+  transform: translateY(0)
+}
+
+.btn.brand:hover {
+  filter: saturate(1.1)
+}
+
+.card h2,
+.card h3 {
+  margin-top: .25rem
+}
+
+ul {
+  margin: .25rem 0 .5rem 1.25rem
+}

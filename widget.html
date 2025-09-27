@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quick QR Widget</title>
+    <style>
+        :root {
+            --brand: #99ff99;
+            --ink: #111
+        }
+
+        body {
+            margin: 0;
+            background: #fff;
+            color: var(--ink);
+            font: 14px system-ui
+        }
+
+        .wrap {
+            padding: 8px
+        }
+
+        input {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: .45rem .6rem;
+            font: inherit
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin-top: 6px;
+            border-radius: 8px;
+            border: 1px dashed #e5e7eb
+        }
+    </style>
+    <script defer src="/widget.js"></script>
+</head>
+
+<body>
+    <div class="wrap">
+        <input id="wText" placeholder="Text or URL…">
+        <canvas id="wCanvas" width="256" height="256"></canvas>
+    </div>
+</body>
+
+</html>

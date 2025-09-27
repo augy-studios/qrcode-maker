@@ -42,10 +42,271 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script defer="" src="https://use.fontawesome.com/releases/v6.5.2/js/all.js"></script>
+
+    <style>
+        /* Offline CSS */
+
+        /* Import Google font - Comfortaa */
+        @import url("https://fonts.googleapis.com/css2?family=Comfortaa:wght@200;300;400;500;600;700&display=swap");
+
+        :link {
+            color: #6f6;
+        }
+
+        :visited {
+            color: #66f;
+        }
+
+        :root {
+            --brand: #99ff99;
+            --ink: #111;
+            --muted: #6b7280;
+            --bg: #ffffff;
+        }
+
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font: 16px system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif
+        }
+
+        .app {
+            display: grid;
+            min-height: 100dvh;
+            grid-template-rows: auto 1fr auto
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 10
+        }
+
+        header .bar {
+            max-width: 960px;
+            margin: auto;
+            display: flex;
+            gap: .75rem;
+            align-items: center;
+            padding: .75rem 1rem
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+            display: inline-grid;
+            place-items: center;
+            border-radius: 8px;
+            background: var(--brand)
+        }
+
+        .title {
+            font-weight: 700;
+            letter-spacing: .2px
+        }
+
+        main {
+            max-width: 960px;
+            margin: auto;
+            padding: 1rem;
+            display: grid;
+            gap: 1rem
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .06);
+            padding: 1rem
+        }
+
+        .grid {
+            display: grid;
+            gap: 1rem
+        }
+
+        @media(min-width:960px) {
+            .grid {
+                grid-template-columns: 1.15fr .85fr
+            }
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: .875rem;
+            font: inherit
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem
+        }
+
+        .controls>* {
+            flex: 0 0 auto
+        }
+
+        .btn {
+            appearance: none;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            border-radius: 12px;
+            padding: .6rem .9rem;
+            cursor: pointer;
+            font-weight: 600
+        }
+
+        .btn.brand {
+            background: var(--brand);
+            border-color: var(--brand);
+            color: #0a0a0a
+        }
+
+        .btn.ghost {
+            background: transparent
+        }
+
+        .row {
+            display: flex;
+            gap: .5rem;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        label {
+            font-size: .9rem;
+            color: var(--muted)
+        }
+
+        select,
+        input[type="number"] {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: .45rem .6rem;
+            font: inherit
+        }
+
+        canvas,
+        svg {
+            width: 100%;
+            height: auto;
+            display: block;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px dashed #e5e7eb
+        }
+
+        .footer {
+            padding: 1rem;
+            color: #6b7280;
+            text-align: center
+        }
+
+        .pill {
+            display: inline-flex;
+            gap: .4rem;
+            align-items: center;
+            padding: .25rem .6rem;
+            border-radius: 999px;
+            background: #eef6ee;
+            border: 1px solid #d6f5d6;
+            color: #065f46;
+            font-size: .8rem
+        }
+
+        .hint {
+            color: #6b7280;
+            font-size: .9rem
+        }
+    </style>
 </head>
 
 <body>
-    QR Maker
+    <div class="app">
+        <header>
+            <div class="bar">
+                <div class="logo" aria-hidden="true">▦</div>
+                <div class="title">QR Maker</div>
+                <span class="pill" title="Works offline"><span>●</span> Works Offline</span>
+                <div style="margin-left:auto" class="row">
+                    <button class="btn ghost" id="installBtn" hidden>Install</button>
+                    <a class="btn ghost" href="/widget.html" target="_blank" rel="noopener"
+                        title="Experimental widget">Widget</a>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="card grid">
+                <div class="left">
+                    <h2>Create a QR</h2>
+                    <p class="hint">Type or paste any text/URL. If you share to this app from the system share menu, it
+                        auto‑fills here.</p>
+                    <textarea id="qrInput" placeholder="Paste text or URL…"></textarea>
+                    <div class="controls">
+                        <div class="row"><label for="qrSize">Size</label><input id="qrSize" type="number" value="512"
+                                min="128" max="2048" step="64"></div>
+                        <div class="row"><label for="qrMargin">Margin</label><input id="qrMargin" type="number"
+                                value="4" min="0" max="32"></div>
+                        <div class="row"><label for="qrEC">Error‑Correction</label>
+                            <select id="qrEC">
+                                <option value="L">L (7%)</option>
+                                <option value="M" selected>M (15%)</option>
+                                <option value="Q">Q (25%)</option>
+                                <option value="H">H (30%)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button class="btn brand" id="makeBtn">Generate</button>
+                        <button class="btn" id="downloadPngBtn">Download PNG</button>
+                        <button class="btn" id="downloadSvgBtn">Download SVG</button>
+                        <button class="btn" id="copyImgBtn">Copy Image</button>
+                        <button class="btn" id="shareBtn">Share</button>
+                        <button class="btn ghost" id="clearBtn">Clear</button>
+                    </div>
+                </div>
+                <div>
+                    <h2>Preview</h2>
+                    <canvas id="qrCanvas" width="512" height="512" aria-label="QR preview"></canvas>
+                    <p class="hint">Tip: Install this as an app. On Android, you can also share text/URLs directly to
+                        “QR Maker”.</p>
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>Why this app?</h3>
+                <ul>
+                    <li>Works fully offline after first visit.</li>
+                    <li>Shows up in the system share sheet (Web Share Target).</li>
+                    <li>You can even install it as a widget on your home screen!</li>
+                </ul>
+            </section>
+        </main>
+
+        <footer class="footer">Made with ❤️ by Augy.</footer>
+    </div>
+
+    <script>
+        // Register Service Worker early for offline + share target handling
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
 
     <script src="/script.js"></script>
 </body>

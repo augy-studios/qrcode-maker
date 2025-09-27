@@ -7,6 +7,18 @@
         "type": "image/png",
         "sizes": "512x512"
     }],
+    "share_target": {
+        "action": "/?share-target",
+        "method": "GET",
+        "enctype": "application/x-www-form-urlencoded",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url"
+        }
+    },
+    "categories": ["utilities", "productivity"],
+    "prefer_related_applications": false,
     "screenshots": [{
             "src": "/images/screenshot_1.png",
             "type": "image/png",
@@ -18,6 +30,13 @@
             "sizes": "1920x988"
         }
     ],
+    "widgets": [{
+        "src": "/widget.html",
+        "name": "Quick QR",
+        "description": "Type and render a QR right on your home screen.",
+        "sizes": ["2x2", "4x2", "4x4"],
+        "type": "text/html"
+    }],
     "start_url": ".",
     "theme_color": "#9f9",
     "background_color": "#9f9",
