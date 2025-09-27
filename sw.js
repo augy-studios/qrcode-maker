@@ -8,8 +8,6 @@ const ASSETS = [
   '/manifest.json',
   '/qrmakericon1.png',
   '/favicon.ico',
-  '/widget.html',
-  '/widget.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {

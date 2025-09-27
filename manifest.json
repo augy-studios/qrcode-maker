@@ -30,13 +30,6 @@
             "sizes": "1920x988"
         }
     ],
-    "widgets": [{
-        "src": "/widget.html",
-        "name": "Quick QR",
-        "description": "Type and render a QR right on your home screen.",
-        "sizes": ["2x2", "4x2", "4x4"],
-        "type": "text/html"
-    }],
     "start_url": ".",
     "theme_color": "#9f9",
     "background_color": "#9f9",
