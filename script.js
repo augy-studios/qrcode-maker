@@ -66,7 +66,7 @@ async function renderAll() {
     preview.innerHTML = svg;
     currentSvg = svg;
 
-    // Online PNG (API)
+    // Online PNG
     const apiUrl = buildApiURL(data || ' ', size, ecc, quiet);
     apiImg.src = apiToggle.checked ? apiUrl : '';
     currentPngURL = apiToggle.checked ? apiUrl : null;

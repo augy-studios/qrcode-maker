@@ -55,8 +55,7 @@
     <main class="wrap">
         <section class="card">
             <h2>Create QR</h2>
-            <p class="hint">Paste or share your text / link. The QR updates live. Brand colour <code>#99ff99</code>,
-                light theme only.</p>
+            <p class="hint">Paste or share your text / link.</p>
 
             <label for="qrtext" class="visually-hidden">QR text</label>
             <textarea id="qrtext" rows="4" placeholder="Type or share something…"></textarea>
@@ -96,7 +95,7 @@
                     <div id="preview"></div>
                 </div>
                 <div class="pane">
-                    <h3>PNG (API)</h3>
+                    <h3>PNG</h3>
                     <img id="apiImg" alt="QR PNG from API" />
                 </div>
             </div>
@@ -106,11 +105,6 @@
                 <button id="downloadPng" class="btn">Download PNG</button>
                 <button id="shareOut" class="btn ghost">Share QR</button>
             </div>
-
-            <p class="fine">
-                PNGs via <a href="https://goqr.me/api/" target="_blank" rel="noreferrer">QRServer API</a>. Works offline
-                via a local encoder; PNG API requires connectivity. :contentReference[oaicite:2]{index=2}
-            </p>
         </section>
     </main>
 
