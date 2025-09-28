@@ -1,7 +1,7 @@
 {
     "name": "QR Maker by UwU Apps",
     "short_name": "UwU QR Maker",
-    "description": "Your offline QR Maker with widget and sharing options.",
+    "description": "The QR Maker that will show up in sharing options.",
     "icons": [{
         "src": "qrmakericon1.png",
         "type": "image/png",

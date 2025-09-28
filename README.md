@@ -1,2 +1,2 @@
 # qrcode-maker
-Your offline QR Maker with widget and sharing options.
+The QR Maker that will show up in sharing options.
