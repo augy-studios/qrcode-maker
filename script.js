@@ -90,7 +90,7 @@ btnSvg.addEventListener('click', () => {
 
 btnPng.addEventListener('click', async () => {
     if (!currentPngURL) {
-        /* generate PNG from SVG client-side as fallback */
+        // Generate PNG from SVG client-side as fallback
         const canvas = document.createElement('canvas');
         const size = parseInt(sizeSel.value, 10);
         canvas.width = canvas.height = size;
@@ -107,14 +107,24 @@ btnPng.addEventListener('click', async () => {
             a.href = canvas.toDataURL('image/png');
             a.download = 'qr.png';
             a.click();
+            URL.revokeObjectURL(img.src);
         };
         img.src = URL.createObjectURL(svgBlob);
         return;
     }
-    const a = document.createElement('a');
-    a.href = currentPngURL;
-    a.download = 'qr.png';
-    a.click();
+
+    try {
+        const response = await fetch(currentPngURL);
+        const blob = await response.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'qr.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    } catch (err) {
+        console.error('Download failed', err);
+        alert('Failed to download PNG. Please try again.');
+    }
 });
 
 // Share out the current page (deep-link with ?text=…)
