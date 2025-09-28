@@ -8,6 +8,7 @@ const ASSETS = [
   '/manifest.json',
   '/qrmakericon1.png',
   '/favicon.ico',
+  'https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js'
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
