@@ -1,0 +1,9 @@
+{
+    "name": "qr-maker",
+    "version": "1.0.0",
+    "description": "QR Maker by UwU Apps - A simple QR code generator with customization options.",
+    "dependencies": {
+        "qrcode": "^1.5.3",
+        "sharp": "^0.33.4"
+    }
+}

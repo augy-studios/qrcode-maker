@@ -40,105 +40,189 @@
     <meta name="twitter:image:src" content="/qrmakericon1.png">
     <meta property="og:image" content="/qrmakericon1.png" />
 
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script defer="" src="https://use.fontawesome.com/releases/v6.5.2/js/all.js"></script>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js" as="script" />
 </head>
 
 <body>
-    <header class="appbar">
-        <div class="logo-dot"></div>
-        <h1>QR Maker</h1>
-        <button id="installBtn" class="btn ghost" aria-label="Install">Install</button>
-    </header>
+    <!-- Background blobs -->
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
 
-    <main class="wrap">
-        <section class="card">
-            <h2>Create QR</h2>
-            <p class="hint">Paste or share your text / link.</p>
-
-            <label for="qrtext" class="visually-hidden">QR text</label>
-            <textarea id="qrtext" rows="4" placeholder="Type or share something…"></textarea>
-
-            <div class="row">
-                <label class="chk">
-                    <input type="checkbox" id="apiToggle" checked />
-                    <span>Use QRServer PNG (online)</span>
-                </label>
-                <label class="chk">
-                    <input type="checkbox" id="marginToggle" checked />
-                    <span>Quiet zone</span>
-                </label>
-                <label class="sel">
-                    ECC:
-                    <select id="ecc">
-                        <option value="M">M (15%)</option>
-                        <option value="L">L (7%)</option>
-                        <option value="Q">Q (25%)</option>
-                        <option value="H">H (30%)</option>
-                    </select>
-                </label>
-                <label class="sel">
-                    Size:
-                    <select id="size">
-                        <option>256</option>
-                        <option selected>512</option>
-                        <option>768</option>
-                        <option>1024</option>
-                    </select>px
-                </label>
-            </div>
-
-            <div class="preview">
-                <div class="pane">
-                    <h3>Preview</h3>
-                    <div id="preview"></div>
+    <div class="app-shell">
+        <!-- Header -->
+        <header class="glass-card header-card">
+            <div class="header-inner">
+                <div class="brand">
+                    <span class="brand-icon">⬛</span>
+                    <span class="brand-name">QRGen</span>
                 </div>
-                <div class="pane">
-                    <h3>PNG</h3>
-                    <img id="apiImg" alt="QR PNG from API" />
+                <nav class="tab-nav" role="tablist">
+                    <button class="tab-btn active" data-tab="url" role="tab" aria-selected="true">🔗 URL</button>
+                    <button class="tab-btn" data-tab="text" role="tab" aria-selected="false">💬 Text</button>
+                    <button class="tab-btn" data-tab="contact" role="tab" aria-selected="false">👤 Contact</button>
+                    <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">🕑 History</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <main class="main-grid">
+            <!-- Left: Input Panel -->
+            <section class="glass-card input-panel">
+                <!-- URL Tab -->
+                <div id="tab-url" class="tab-pane active">
+                    <h2 class="panel-title">Enter URL</h2>
+                    <div class="field">
+                        <label for="url-input">Website URL</label>
+                        <input id="url-input" type="url" placeholder="https://example.com" autocomplete="url" />
+                        <span class="field-hint">Include https:// or we'll add it for you</span>
+                    </div>
                 </div>
-            </div>
 
-            <div class="row actions">
-                <button id="downloadSvg" class="btn">Download SVG</button>
-                <button id="downloadPng" class="btn">Download PNG</button>
-                <button id="shareOut" class="btn ghost">Share QR</button>
-            </div>
-        </section>
-    </main>
+                <!-- Text Tab -->
+                <div id="tab-text" class="tab-pane">
+                    <h2 class="panel-title">Enter Text</h2>
+                    <div class="field">
+                        <label for="text-input">Content</label>
+                        <textarea id="text-input" rows="5" placeholder="Type any text, message, or data..."></textarea>
+                    </div>
+                </div>
 
-    <footer class="footer">
-        <small>Made with ❤️ by Augy.</small>
-    </footer>
+                <!-- Contact Tab -->
+                <div id="tab-contact" class="tab-pane">
+                    <h2 class="panel-title">Contact Info</h2>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="c-first">First Name</label>
+                            <input id="c-first" type="text" placeholder="John" />
+                        </div>
+                        <div class="field">
+                            <label for="c-last">Last Name</label>
+                            <input id="c-last" type="text" placeholder="Doe" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="c-phone">Phone</label>
+                        <input id="c-phone" type="tel" placeholder="+65 9123 4567" />
+                    </div>
+                    <div class="field">
+                        <label for="c-email">Email</label>
+                        <input id="c-email" type="email" placeholder="john@example.com" />
+                    </div>
+                    <div class="field">
+                        <label for="c-org">Organisation</label>
+                        <input id="c-org" type="text" placeholder="Company Name" />
+                    </div>
+                    <div class="field">
+                        <label for="c-url">Website</label>
+                        <input id="c-url" type="url" placeholder="https://example.com" />
+                    </div>
+                </div>
 
-    <script>
-        // PWA install prompt
-        let deferredPrompt;
-        const installBtn = document.getElementById('installBtn');
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installBtn.style.display = 'inline-flex';
-        });
-        installBtn.addEventListener('click', async () => {
-            if (!deferredPrompt) return;
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-            deferredPrompt = null;
-            installBtn.style.display = 'none';
-        });
+                <!-- History Tab -->
+                <div id="tab-history" class="tab-pane">
+                    <div class="history-header">
+                        <h2 class="panel-title">Recent QR Codes</h2>
+                        <button id="clear-history-btn" class="btn-ghost btn-sm">Clear all</button>
+                    </div>
+                    <ul id="history-list" class="history-list">
+                        <li class="history-empty">No history yet. Generate a QR code to get started.</li>
+                    </ul>
+                </div>
 
-        // Register SW
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+                <!-- Customisation (shown for url/text/contact tabs) -->
+                <div id="customisation-section">
+                    <hr class="divider" />
+                    <h3 class="section-subtitle">Customise</h3>
 
-        // Load QR encoder (cached by SW for offline)
-        const lib = document.createElement('script');
-        lib.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js';
-        document.head.appendChild(lib);
-    </script>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="dark-color">QR Colour</label>
+                            <div class="color-wrap">
+                                <input id="dark-color" type="color" value="#000000" />
+                                <span id="dark-color-hex" class="color-hex">#000000</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="light-color">Background</label>
+                            <div class="color-wrap">
+                                <input id="light-color" type="color" value="#ffffff" />
+                                <span id="light-color-hex" class="color-hex">#ffffff</span>
+                            </div>
+                        </div>
+                    </div>
 
-    <script src="/script.js"></script>
+                    <div class="field">
+                        <label for="logo-upload">Logo (optional)</label>
+                        <div class="logo-drop-zone" id="logo-drop-zone">
+                            <input id="logo-upload" type="file" accept="image/*" hidden />
+                            <span id="logo-drop-label">Drop image or <button type="button" class="link-btn"
+                                    id="logo-browse-btn">browse</button></span>
+                            <button type="button" id="logo-clear-btn" class="btn-ghost btn-xs" hidden>✕ Remove</button>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="qr-size">Size: <span id="size-label">400px</span></label>
+                        <input id="qr-size" type="range" min="200" max="800" step="50" value="400" />
+                    </div>
+
+                    <div class="field-row format-row">
+                        <span class="field-label">Format</span>
+                        <label class="radio-pill">
+                            <input type="radio" name="fmt" value="png" checked /> PNG
+                        </label>
+                        <label class="radio-pill">
+                            <input type="radio" name="fmt" value="svg" /> SVG
+                        </label>
+                    </div>
+
+                    <button id="generate-btn" class="btn-primary btn-full">
+                        <span id="gen-btn-text">Generate QR Code</span>
+                        <span id="gen-spinner" class="spinner" hidden></span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right: Output Panel -->
+            <section class="glass-card output-panel">
+                <h2 class="panel-title">Your QR Code</h2>
+
+                <div id="qr-placeholder" class="qr-placeholder">
+                    <div class="placeholder-icon">⬛</div>
+                    <p>Fill in the form and hit <strong>Generate</strong></p>
+                </div>
+
+                <div id="qr-result" hidden>
+                    <div class="qr-frame glass-inset">
+                        <img id="qr-img" src="" alt="Generated QR Code" />
+                    </div>
+                    <p id="qr-meta" class="qr-meta"></p>
+                    <div class="action-row">
+                        <button id="download-btn" class="btn-primary">⬇ Download</button>
+                        <button id="copy-btn" class="btn-secondary">📋 Copy Data</button>
+                    </div>
+                </div>
+
+                <div id="qr-error" class="qr-error" hidden>
+                    <span>⚠️</span> <span id="qr-error-msg"></span>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            QR Maker by UwU Apps. Made with ❤️ by Augy.
+        </footer>
+    </div>
+
+    <script src="/liquid-glass.js"></script>
+    <script src="/app.js"></script>
 </body>
 
 </html>

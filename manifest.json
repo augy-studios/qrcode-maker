@@ -3,9 +3,10 @@
     "short_name": "UwU QR Maker",
     "description": "The QR Maker that will show up in sharing options.",
     "icons": [{
-        "src": "qrmakericon1.png",
+        "src": "/icons/qrmakericon1.png",
         "type": "image/png",
-        "sizes": "512x512"
+        "sizes": "512x512",
+        "purpose": "any maskable"
     }],
     "share_target": {
         "action": "/share-target",
