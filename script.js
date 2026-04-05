@@ -430,7 +430,8 @@ document.querySelectorAll('.pw-toggle').forEach(btn => {
         const input = btn.previousElementSibling;
         const showing = input.type === 'text';
         input.type = showing ? 'password' : 'text';
-        btn.textContent = showing ? '👁' : '🙈';
+        btn.querySelector('.pw-icon-show').style.display = showing ? '' : 'none';
+        btn.querySelector('.pw-icon-hide').style.display = showing ? 'none' : '';
     });
 });
 
