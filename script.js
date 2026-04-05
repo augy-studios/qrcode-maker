@@ -262,16 +262,12 @@ document.getElementById('authBtn').addEventListener('click', () => {
 });
 
 /* -- ENTER KEY SUBMIT -- */
-['loginUsername', 'loginPassword'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('loginSubmit').click();
-    });
+document.getElementById('authLoginForm').addEventListener('submit', () => {
+    document.getElementById('loginSubmit').click();
 });
 
-['regUsername', 'regEmail', 'regPassword', 'regPassword2'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('registerSubmit').click();
-    });
+document.getElementById('authRegisterForm').addEventListener('submit', () => {
+    document.getElementById('registerSubmit').click();
 });
 
 /* -- LOGIN -- */
