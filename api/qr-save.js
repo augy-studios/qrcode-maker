@@ -1,30 +1,19 @@
 import supabase from '../lib/supabase.js';
 import { err } from '../lib/response.js';
 import { requireAuth } from '../lib/session.js';
-import formidable from 'formidable';
-import fs from 'fs';
-import sharp from 'sharp';
-
-export const config = {
-    api: {
-        bodyParser: false
-    }
-};
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return err(res, 'Method not allowed', 405);
 
-    const form = formidable({
-        maxFileSize: 2 * 1024 * 1024
-    });
-    const [fields, files] = await form.parse(req);
+    let body;
+    try {
+        body = req.body;
+    } catch {
+        return err(res, 'Invalid body', 400);
+    }
 
-    const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
-    const data = Array.isArray(fields.data) ? fields.data[0] : fields.data;
-    const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-    const imgFile = files.image?.[0];
-
-    if (!token || !imgFile) return err(res, 'Missing fields');
+    const { token, data, type, imageDataUrl } = body || {};
+    if (!token || !imageDataUrl) return err(res, 'Missing fields', 400);
 
     let userId;
     try {
@@ -33,41 +22,31 @@ export default async function handler(req, res) {
     } catch (e) {
         return err(res, e.message, e.status || 401);
     }
-    const raw = fs.readFileSync(imgFile.filepath);
 
-    // Compress to WebP
-    const webp = await sharp(raw).webp({
-        quality: 85
-    }).toBuffer();
-    const path = `${userId}/${Date.now()}.webp`;
+    // Decode base64 data URL to buffer
+    const base64 = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64, 'base64');
+    const path = `${userId}/${Date.now()}.png`;
 
-    const {
-        error: uploadErr
-    } = await supabase.storage
+    const { error: uploadErr } = await supabase.storage
         .from('qr_images')
-        .upload(path, webp, {
-            contentType: 'image/webp',
-            upsert: false
+        .upload(path, buffer, {
+            contentType: 'image/png',
+            upsert: false,
         });
     if (uploadErr) return err(res, uploadErr.message, 500);
 
-    const {
-        data: urlData
-    } = supabase.storage.from('qr_images').getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from('qr_images').getPublicUrl(path);
 
-    const {
-        error: dbErr
-    } = await supabase.from('qr_codes').insert({
+    const { error: dbErr } = await supabase.from('qr_codes').insert({
         user_id: userId,
         type,
         qr_data: data,
-        data_preview: data.slice(0, 80),
+        data_preview: (data || '').slice(0, 80),
         image_path: path,
         image_url: urlData.publicUrl,
     });
     if (dbErr) return err(res, dbErr.message, 500);
 
-    res.status(200).json({
-        ok: true
-    });
+    res.status(200).json({ ok: true });
 }

@@ -378,25 +378,24 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
 document.getElementById('saveQrBtn').addEventListener('click', async () => {
     if (!currentUser || !currentData) return;
     const canvas = document.getElementById('qrCanvas');
+    const imageDataUrl = canvas.toDataURL('image/png');
 
-    canvas.toBlob(async blob => {
-        const formData = new FormData();
-        formData.append('image', blob, 'qr.webp');
-        formData.append('data', currentData);
-        formData.append('type', activeTab);
-        formData.append('token', localStorage.getItem('qr_session'));
-
-        try {
-            const res = await fetch('/api/qr-save', {
-                method: 'POST',
-                body: formData
-            });
-            if (!res.ok) throw new Error((await res.json()).error);
-            showToast('QR saved!');
-        } catch (e) {
-            showToast('Save failed: ' + e.message);
-        }
-    }, 'image/webp', 0.85);
+    try {
+        const res = await fetch('/api/qr-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token: localStorage.getItem('qr_session'),
+                data: currentData,
+                type: activeTab,
+                imageDataUrl,
+            }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        showToast('QR saved!');
+    } catch (e) {
+        showToast('Save failed: ' + e.message);
+    }
 });
 
 /* -- MY QRs -- */
