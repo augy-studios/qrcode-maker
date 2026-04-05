@@ -18,7 +18,6 @@
             "url": "url"
         }
     },
-    "categories": ["utilities", "productivity"],
     "prefer_related_applications": false,
     "screenshots": [{
             "src": "/images/screenshot_1.png",
@@ -31,10 +30,19 @@
             "sizes": "1920x988"
         }
     ],
-    "start_url": ".",
-    "theme_color": "#9f9",
-    "background_color": "#9f9",
+    "start_url": "/",
+    "theme_color": "#cfc",
+    "background_color": "#cfc",
     "display": "standalone",
     "display_override": ["fullscreen", "minimal-ui", "window-controls-overlay"],
-    "orientation": "portrait-primary"
+    "orientation": "portrait-primary",
+    "id": "template",
+    "dir": "ltr",
+    "scope": "/",
+    "lang": "en",
+    "categories": [
+        "productivity",
+        "lifestyle",
+        "utilities"
+    ]
 }
