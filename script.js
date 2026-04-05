@@ -218,14 +218,48 @@ let currentUser = null;
 
 function setAuthBtn() {
     const btn = document.getElementById('authBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
     if (currentUser) {
         btn.textContent = '📁 My QRs';
+        logoutBtn.style.display = '';
         document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
     } else {
         btn.textContent = 'Register / Login';
+        logoutBtn.style.display = 'none';
         document.getElementById('saveQrBtn').style.display = 'none';
     }
 }
+
+function triggerPasswordSave(username, password) {
+    const form = document.getElementById('pwSaveForm');
+    document.getElementById('pwSaveUsername').value = username;
+    document.getElementById('pwSavePassword').value = password;
+    // Briefly show and submit so the browser password manager intercepts it
+    form.style.display = '';
+    form.style.position = 'fixed';
+    form.style.opacity = '0';
+    form.style.pointerEvents = 'none';
+    form.requestSubmit();
+    setTimeout(() => {
+        form.style.display = 'none';
+        form.style.position = '';
+        form.style.opacity = '';
+        form.style.pointerEvents = '';
+    }, 500);
+}
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    const token = localStorage.getItem('qr_session');
+    await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout', token }),
+    }).catch(() => {});
+    localStorage.removeItem('qr_session');
+    currentUser = null;
+    setAuthBtn();
+    showToast('Logged out.');
+});
 
 document.getElementById('authBtn').addEventListener('click', () => {
     if (currentUser) {
@@ -260,6 +294,7 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
         if (!res.ok) throw new Error(data.error || 'Login failed');
         currentUser = data.user;
         localStorage.setItem('qr_session', data.token);
+        triggerPasswordSave(username, password);
         closeModal('authModal');
         setAuthBtn();
         showToast('Welcome back!');
@@ -310,8 +345,12 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Registration failed');
-        msg.className = 'auth-msg success';
-        msg.textContent = data.message || 'Account created! You can now log in.';
+        triggerPasswordSave(username, pw);
+        currentUser = { id: data.session.userId, username: data.username };
+        localStorage.setItem('qr_session', data.session.token);
+        closeModal('authModal');
+        setAuthBtn();
+        showToast('Account created! Welcome, ' + username + '!');
     } catch (e) {
         msg.className = 'auth-msg error';
         msg.textContent = e.message;

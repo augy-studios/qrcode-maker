@@ -73,6 +73,10 @@
                         </svg>
                 </button>
                 <button class="btn-primary" id="authBtn">Register / Login</button>
+                <button class="btn-ghost" id="logoutBtn" style="display:none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Log out
+                </button>
             </div>
         </div>
     </header>
@@ -167,7 +171,6 @@
 
                     <div class="form-actions">
                         <button class="btn-ghost" id="clearBtn">Clear</button>
-                        <button class="btn-primary" id="saveQrBtn" style="display:none">💾 Save QR</button>
                     </div>
                 </div>
 
@@ -186,8 +189,18 @@
                         <canvas id="qrCanvas" style="display:none"></canvas>
                     </div>
                     <div class="qr-actions" id="qrActions" style="display:none">
-                        <button class="btn-primary" id="downloadBtn">⬇ Download</button>
-                        <button class="btn-ghost" id="copyDataBtn">📋 Copy Data</button>
+                        <button class="btn-primary" id="downloadBtn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download
+                        </button>
+                        <button class="btn-ghost" id="copyDataBtn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy Data
+                        </button>
+                        <button class="btn-ghost" id="saveQrBtn" style="display:none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Save QR
+                        </button>
                     </div>
                     <div class="qr-data-box glass" id="qrDataBox" style="display:none">
                         <pre id="qrDataPre"></pre>
@@ -274,6 +287,13 @@
 
     <!-- TOAST -->
     <div class="toast" id="toast"></div>
+
+    <!-- Hidden form to trigger browser password save -->
+    <form id="pwSaveForm" style="display:none" method="post" action="#">
+        <input id="pwSaveUsername" type="text" name="username" autocomplete="username" />
+        <input id="pwSavePassword" type="password" name="password" autocomplete="current-password" />
+        <button type="submit">Save</button>
+    </form>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
