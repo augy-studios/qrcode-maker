@@ -1,9 +1,6 @@
-import {
-    createClient
-} from '@supabase/supabase-js';
-import {
-    err
-} from '../lib/response.js';
+import supabase from '../lib/supabase.js';
+import { err } from '../lib/response.js';
+import { requireAuth } from '../lib/session.js';
 import formidable from 'formidable';
 import fs from 'fs';
 import sharp from 'sharp';
@@ -13,11 +10,6 @@ export const config = {
         bodyParser: false
     }
 };
-
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return err(res, 'Method not allowed', 405);
@@ -30,17 +22,17 @@ export default async function handler(req, res) {
     const token = Array.isArray(fields.token) ? fields.token[0] : fields.token;
     const data = Array.isArray(fields.data) ? fields.data[0] : fields.data;
     const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
-    const imgFile = files.image ?. [0];
+    const imgFile = files.image?.[0];
 
     if (!token || !imgFile) return err(res, 'Missing fields');
 
-    const {
-        data: authData,
-        error: authErr
-    } = await supabase.auth.getUser(token);
-    if (authErr || !authData.user) return err(res, 'Unauthorised', 401);
-
-    const userId = authData.user.id;
+    let userId;
+    try {
+        req.headers['authorization'] = `Bearer ${token}`;
+        ({ userId } = await requireAuth(req));
+    } catch (e) {
+        return err(res, e.message, e.status || 401);
+    }
     const raw = fs.readFileSync(imgFile.filepath);
 
     // Compress to WebP

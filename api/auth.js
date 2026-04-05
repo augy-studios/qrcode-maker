@@ -1,89 +1,100 @@
-import {
-    createClient
-} from '@supabase/supabase-js';
-import {
-    ok,
-    err
-} from '../lib/response.js';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+import supabase from '../lib/supabase.js';
+import { ok, err } from '../lib/response.js';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return err(res, 'Method not allowed', 405);
-    const {
-        action,
-        username,
-        email,
-        password,
-        token
-    } = req.body;
+    const { action, username, email, password, token } = req.body;
 
     try {
         if (action === 'register') {
-            // Check username not already taken
-            const { data: existing } = await supabase
-                .from('qr_profiles')
-                .select('id')
-                .eq('username', username)
-                .maybeSingle();
-            if (existing) return err(res, 'Username already taken.');
+            if (!username || !email || !password)
+                return err(res, 'Username, email, and password are required');
+            if (password.length < 6)
+                return err(res, 'Password must be at least 6 characters');
+            if (!/^[a-zA-Z0-9_]{3,24}$/.test(username))
+                return err(res, 'Username must be 3-24 alphanumeric/underscore characters');
 
-            const { error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: { data: { username } }
+            const { data: existing } = await supabase
+                .from('qr_users')
+                .select('id')
+                .or(`username.eq.${username},email.eq.${email}`)
+                .maybeSingle();
+            if (existing) return err(res, 'Username or email already taken', 409);
+
+            const hash = await bcrypt.hash(password, 12);
+            const { data: user, error: insertErr } = await supabase
+                .from('qr_users')
+                .insert({ username, email, password_hash: hash })
+                .select('id, username')
+                .single();
+            if (insertErr) return err(res, 'Registration failed', 500);
+
+            const sessionToken = crypto.randomBytes(32).toString('hex');
+            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            await supabase.from('qr_sessions').insert({
+                token: sessionToken,
+                user_id: user.id,
+                expires_at: expires.toISOString(),
             });
-            if (error) return err(res, error.message);
-            return ok(res, { message: 'Account created! You can now log in.' });
+
+            return ok(res, {
+                message: 'Account created! You can now log in.',
+                username: user.username,
+                session: { token: sessionToken, userId: user.id },
+            });
         }
 
         if (action === 'login') {
-            // Look up email by username
-            const { data: profile, error: profileErr } = await supabase
-                .from('qr_profiles')
-                .select('id')
+            if (!username || !password)
+                return err(res, 'Username and password are required');
+
+            const { data: user, error: userErr } = await supabase
+                .from('qr_users')
+                .select('id, username, password_hash')
                 .eq('username', username)
                 .maybeSingle();
-            if (profileErr || !profile) return err(res, 'Username not found.');
+            if (userErr || !user) return err(res, 'Invalid username or password', 401);
 
-            // Get email from auth.users via admin API
-            const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(profile.id);
-            if (userErr || !userData.user) return err(res, 'Account not found.');
+            const valid = await bcrypt.compare(password, user.password_hash);
+            if (!valid) return err(res, 'Invalid username or password', 401);
 
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: userData.user.email,
-                password
+            const sessionToken = crypto.randomBytes(32).toString('hex');
+            const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            await supabase.from('qr_sessions').insert({
+                token: sessionToken,
+                user_id: user.id,
+                expires_at: expires.toISOString(),
             });
-            if (error) return err(res, error.message);
+
             return ok(res, {
-                user: {
-                    id: data.user.id,
-                    username,
-                    email: data.user.email
-                },
-                token: data.session.access_token
+                user: { id: user.id, username: user.username },
+                token: sessionToken,
             });
         }
 
-        if (action === 'me') {
-            const { data, error } = await supabase.auth.getUser(token);
-            if (error || !data.user) return err(res, 'Invalid session', 401);
+        if (action === 'logout') {
+            if (token) await supabase.from('qr_sessions').delete().eq('token', token);
+            return ok(res, { ok: true });
+        }
 
-            const { data: profile } = await supabase
-                .from('qr_profiles')
-                .select('username')
-                .eq('id', data.user.id)
-                .maybeSingle();
+        if (action === 'me') {
+            if (!token) return err(res, 'Unauthorised', 401);
+
+            const { data: session, error: sessionErr } = await supabase
+                .from('qr_sessions')
+                .select('user_id, expires_at, qr_users(username)')
+                .eq('token', token)
+                .single();
+            if (sessionErr || !session) return err(res, 'Invalid session', 401);
+            if (new Date(session.expires_at) < new Date()) {
+                await supabase.from('qr_sessions').delete().eq('token', token);
+                return err(res, 'Session expired', 401);
+            }
 
             return ok(res, {
-                user: {
-                    id: data.user.id,
-                    username: profile?.username,
-                    email: data.user.email
-                }
+                user: { id: session.user_id, username: session.qr_users.username },
             });
         }
 
