@@ -280,6 +280,9 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   transition: color var(--transition), border-color var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tab.active {
