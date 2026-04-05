@@ -234,18 +234,10 @@ function triggerPasswordSave(username, password) {
     const form = document.getElementById('pwSaveForm');
     document.getElementById('pwSaveUsername').value = username;
     document.getElementById('pwSavePassword').value = password;
-    // Briefly show and submit so the browser password manager intercepts it
-    form.style.display = '';
-    form.style.position = 'fixed';
-    form.style.opacity = '0';
-    form.style.pointerEvents = 'none';
-    form.requestSubmit();
-    setTimeout(() => {
-        form.style.display = 'none';
-        form.style.position = '';
-        form.style.opacity = '';
-        form.style.pointerEvents = '';
-    }, 500);
+    form.style.cssText = 'position:fixed;opacity:0;pointer-events:none;top:-9999px';
+    // Dispatch a submit event so password managers intercept it without navigating
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    setTimeout(() => { form.style.cssText = 'display:none'; }, 500);
 }
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
