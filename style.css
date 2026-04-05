@@ -717,6 +717,158 @@ textarea.field-input {
   margin-top: 32px;
 }
 
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  /* Topbar: allow horizontal scroll if buttons don't fit */
+  .topbar-inner {
+    padding: 10px 16px;
+    gap: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topbar-actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  .brand {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+  }
+
+  /* Tabs: scroll horizontally */
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex-shrink: 0;
+    padding: 14px 14px;
+    font-size: 0.88rem;
+  }
+
+  /* Card body: single column, tighter padding */
+  .card-body {
+    padding: 16px;
+    gap: 20px;
+  }
+
+  /* Main wrap */
+  .main-wrap {
+    padding: 20px 12px 48px;
+  }
+
+  /* Hero */
+  .hero-text h1 {
+    font-size: clamp(1.4rem, 6vw, 2rem);
+    flex-wrap: wrap;
+  }
+
+  .hero-text p {
+    font-size: 0.9rem;
+  }
+
+  /* QR actions: scroll horizontally if needed */
+  .qr-actions {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    width: 100%;
+    scrollbar-width: none;
+  }
+
+  .qr-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .qr-actions .btn-primary,
+  .qr-actions .btn-ghost {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+
+  /* Form actions */
+  .form-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Grid-2 stays 2 cols but shrinks padding */
+  .grid-2 {
+    gap: 8px;
+  }
+
+  /* Buttons: slightly smaller */
+  .btn-primary,
+  .btn-ghost {
+    padding: 8px 14px;
+    font-size: 0.88rem;
+  }
+
+  /* Modal: full width with small margin */
+  .modal {
+    padding: 20px 16px;
+  }
+
+  .modal-wide {
+    max-width: 100%;
+  }
+
+  /* Theme grid: single column on tiny screens */
+  .theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* QR grid: 2 columns minimum */
+  .qr-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  /* Toast: full width feel */
+  .toast {
+    white-space: normal;
+    text-align: center;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar-inner {
+    padding: 8px 12px;
+  }
+
+  .tab {
+    padding: 12px 10px;
+    font-size: 0.82rem;
+    gap: 4px;
+  }
+
+  .tab svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .card-body {
+    padding: 12px;
+  }
+
+  .btn-primary,
+  .btn-ghost {
+    padding: 7px 12px;
+    font-size: 0.85rem;
+  }
+}
+
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar {
   width: 6px;
