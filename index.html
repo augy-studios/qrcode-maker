@@ -217,18 +217,20 @@
         </main>
 
         <footer class="footer">
-            QR Maker &nbsp;·&nbsp; Made with ❤️ by Augy.
+            QR Maker &nbsp;·&nbsp; Stateless &amp; private &nbsp;·&nbsp; No data stored
         </footer>
     </div>
+
+    <script src="/liquid-glass.js"></script>
 
     <script src="/script.js"></script>
 
     <script>
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('/sw.js');
+            navigator.serviceWorker.register('/sw.js');
         }
     </script>
-    
+
 </body>
 
 </html>
