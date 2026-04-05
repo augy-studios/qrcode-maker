@@ -230,14 +230,13 @@ function setAuthBtn() {
     }
 }
 
-function triggerPasswordSave(username, password) {
-    const form = document.getElementById('pwSaveForm');
-    document.getElementById('pwSaveUsername').value = username;
-    document.getElementById('pwSavePassword').value = password;
-    form.style.cssText = 'position:fixed;opacity:0;pointer-events:none;top:-9999px';
-    // Dispatch a submit event so password managers intercept it without navigating
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    setTimeout(() => { form.style.cssText = 'display:none'; }, 500);
+async function triggerPasswordSave(username, password) {
+    if (window.PasswordCredential) {
+        try {
+            const cred = new PasswordCredential({ id: username, password, name: username });
+            await navigator.credentials.store(cred);
+        } catch (e) {}
+    }
 }
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
