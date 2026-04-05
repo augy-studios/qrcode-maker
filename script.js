@@ -1,6 +1,4 @@
-/* ═══════════════════════════════════════════
-   THEME
-═══════════════════════════════════════════ */
+/* ── THEME ── */
 const THEMES = [{
         id: 'classic',
         label: 'Classic',
@@ -63,9 +61,7 @@ function renderThemeGrid() {
 }
 applyTheme(currentTheme);
 
-/* ═══════════════════════════════════════════
-   TABS
-═══════════════════════════════════════════ */
+/* ── TABS ── */
 let activeTab = 'url';
 
 document.querySelectorAll('.tab').forEach(btn => {
@@ -79,9 +75,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     });
 });
 
-/* ═══════════════════════════════════════════
-   QR GENERATION
-═══════════════════════════════════════════ */
+/* ── QR GENERATION ── */
 let qrInstance = null;
 let currentData = '';
 
@@ -94,6 +88,15 @@ function getFormData() {
         }
         case 'text':
             return document.getElementById('textInput').value.trim();
+        case 'wifi': {
+            const ssid = document.getElementById('wssid').value.trim();
+            if (!ssid) return '';
+            const pass = document.getElementById('wpass').value;
+            const sec = document.getElementById('wsec').value;
+            const hidden = document.getElementById('whidden').checked ? 'true' : 'false';
+            const esc = s => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/"/g, '\\"');
+            return `WIFI:T:${sec};S:${esc(ssid)};P:${esc(pass)};H:${hidden};;`;
+        }
         case 'contact': {
             const fn = document.getElementById('cfn').value.trim();
             const ln = document.getElementById('cln').value.trim();
@@ -143,22 +146,24 @@ function updateQR() {
 }
 
 // Live input listeners
-['urlInput', 'textInput', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updateQR);
 });
+document.getElementById('wsec').addEventListener('change', updateQR);
+document.getElementById('whidden').addEventListener('change', updateQR);
 
 document.getElementById('clearBtn').addEventListener('click', () => {
-    ['urlInput', 'textInput', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+    ['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+    document.getElementById('whidden').checked = false;
+    document.getElementById('wsec').value = 'WPA';
     updateQR();
 });
 
-/* ═══════════════════════════════════════════
-   DOWNLOAD
-═══════════════════════════════════════════ */
+/* ── DOWNLOAD ── */
 document.getElementById('downloadBtn').addEventListener('click', () => {
     const canvas = document.getElementById('qrCanvas');
     const a = document.createElement('a');
@@ -167,17 +172,13 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
     a.click();
 });
 
-/* ═══════════════════════════════════════════
-   COPY DATA
-═══════════════════════════════════════════ */
+/* ── COPY DATA ── */
 document.getElementById('copyDataBtn').addEventListener('click', async () => {
     await navigator.clipboard.writeText(currentData).catch(() => {});
     showToast('Data copied to clipboard!');
 });
 
-/* ═══════════════════════════════════════════
-   MODALS
-═══════════════════════════════════════════ */
+/* ── MODALS ── */
 function openModal(id) {
     document.getElementById(id).classList.add('open');
 }
@@ -200,9 +201,7 @@ document.getElementById('themeBtn').addEventListener('click', () => {
     openModal('themeModal');
 });
 
-/* ═══════════════════════════════════════════
-   AUTH TABS (inside modal)
-═══════════════════════════════════════════ */
+/* ── AUTH TABS ── */
 document.querySelectorAll('.modal-tab').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
@@ -214,9 +213,7 @@ document.querySelectorAll('.modal-tab').forEach(btn => {
     });
 });
 
-/* ═══════════════════════════════════════════
-   AUTH STATE
-═══════════════════════════════════════════ */
+/* ── AUTH STATE ── */
 let currentUser = null;
 
 function setAuthBtn() {
@@ -239,9 +236,7 @@ document.getElementById('authBtn').addEventListener('click', () => {
     }
 });
 
-/* ═══════════════════════════════════════════
-   LOGIN
-═══════════════════════════════════════════ */
+/* ── LOGIN ── */
 document.getElementById('loginSubmit').addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -274,9 +269,7 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
     }
 });
 
-/* ═══════════════════════════════════════════
-   REGISTER
-═══════════════════════════════════════════ */
+/* ── REGISTER ── */
 document.getElementById('registerSubmit').addEventListener('click', async () => {
     const email = document.getElementById('regEmail').value.trim();
     const pw = document.getElementById('regPassword').value;
@@ -318,9 +311,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
     }
 });
 
-/* ═══════════════════════════════════════════
-   SESSION RESTORE
-═══════════════════════════════════════════ */
+/* ── SESSION RESTORE ── */
 (async () => {
     const token = localStorage.getItem('qr_session');
     if (!token) return;
@@ -345,9 +336,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
     } catch {}
 })();
 
-/* ═══════════════════════════════════════════
-   SAVE QR
-═══════════════════════════════════════════ */
+/* ── SAVE QR ── */
 document.getElementById('saveQrBtn').addEventListener('click', async () => {
     if (!currentUser || !currentData) return;
     const canvas = document.getElementById('qrCanvas');
@@ -372,9 +361,7 @@ document.getElementById('saveQrBtn').addEventListener('click', async () => {
     }, 'image/webp', 0.85);
 });
 
-/* ═══════════════════════════════════════════
-   MY QRs
-═══════════════════════════════════════════ */
+/* ── MY QRs ── */
 async function loadMyQRs() {
     const grid = document.getElementById('myQrGrid');
     grid.innerHTML = '<p class="empty-state">Loading…</p>';
@@ -419,9 +406,7 @@ function escHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/* ═══════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════ */
+/* ── TOAST ── */
 let toastTimer;
 
 function showToast(msg) {
@@ -432,9 +417,7 @@ function showToast(msg) {
     toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-/* ═══════════════════════════════════════════
-   SERVICE WORKER
-═══════════════════════════════════════════ */
+/* ── SERVICE WORKER ── */
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

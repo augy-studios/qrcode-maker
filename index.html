@@ -91,6 +91,7 @@
                 <button class="tab active" data-tab="url" role="tab">🔗 URL</button>
                 <button class="tab" data-tab="text" role="tab">💬 Text</button>
                 <button class="tab" data-tab="contact" role="tab">👤 Contact</button>
+                <button class="tab" data-tab="wifi" role="tab">📶 WiFi</button>
             </div>
 
             <div class="card-body">
@@ -110,6 +111,24 @@
                     <div class="panel" id="panel-text">
                         <label class="field-label">Text Content</label>
                         <textarea class="field-input" id="textInput" rows="5" placeholder="Enter any text…"></textarea>
+                    </div>
+
+                    <!-- WIFI PANEL -->
+                    <div class="panel" id="panel-wifi">
+                        <label class="field-label">Network Name (SSID)</label>
+                        <input class="field-input" id="wssid" type="text" placeholder="My Home WiFi" />
+                        <label class="field-label">Password</label>
+                        <input class="field-input" id="wpass" type="text" placeholder="Leave blank for open networks" />
+                        <label class="field-label">Security</label>
+                        <select class="field-input" id="wsec">
+                            <option value="WPA">WPA / WPA2</option>
+                            <option value="WEP">WEP</option>
+                            <option value="nopass">None (open)</option>
+                        </select>
+                        <label class="field-label" style="flex-direction:row;display:flex;align-items:center;gap:8px;margin-top:14px">
+                            <input type="checkbox" id="whidden" style="width:auto;accent-color:var(--brand-dark)" />
+                            Hidden network
+                        </label>
                     </div>
 
                     <!-- CONTACT PANEL -->
