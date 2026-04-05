@@ -220,11 +220,11 @@ function setAuthBtn() {
     const btn = document.getElementById('authBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     if (currentUser) {
-        btn.textContent = '📁 My QRs';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> My QRs';
         logoutBtn.style.display = '';
         document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
     } else {
-        btn.textContent = 'Register / Login';
+        btn.innerHTML = 'Register / Login';
         logoutBtn.style.display = 'none';
         document.getElementById('saveQrBtn').style.display = 'none';
     }
@@ -415,8 +415,8 @@ async function loadMyQRs() {
         <img src="${q.image_url}" alt="QR Code" loading="lazy" />
         <div class="qr-card-label">${escHtml(q.data_preview)}</div>
         <div class="qr-card-actions">
-          <a href="${q.image_url}" download="qr-${q.id}.webp" class="btn-ghost" style="text-align:center;font-size:.72rem;padding:5px">⬇</a>
-          <button class="btn-ghost" onclick="deleteQR('${q.id}')">🗑</button>
+          <a href="${q.image_url}" download="qr-${q.id}.png" class="btn-ghost" style="text-align:center;font-size:.72rem;padding:5px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
+          <button class="btn-ghost" onclick="deleteQR('${q.id}')" style="padding:5px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
         </div>
       </div>`).join('');
     } catch {
