@@ -37,7 +37,7 @@ export default async function handler(req, res) {
                 options: { data: { username } }
             });
             if (error) return err(res, error.message);
-            return ok(res, { message: 'Check your email to confirm.' });
+            return ok(res, { message: 'Account created! You can now log in.' });
         }
 
         if (action === 'login') {

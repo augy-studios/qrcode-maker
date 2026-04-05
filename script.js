@@ -311,7 +311,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Registration failed');
         msg.className = 'auth-msg success';
-        msg.textContent = 'Account created! Please check your email to confirm.';
+        msg.textContent = data.message || 'Account created! You can now log in.';
     } catch (e) {
         msg.className = 'auth-msg error';
         msg.textContent = e.message;
