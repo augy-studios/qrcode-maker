@@ -262,6 +262,19 @@ document.getElementById('authBtn').addEventListener('click', () => {
     }
 });
 
+/* -- ENTER KEY SUBMIT -- */
+['loginUsername', 'loginPassword'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('loginSubmit').click();
+    });
+});
+
+['regUsername', 'regEmail', 'regPassword', 'regPassword2'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('registerSubmit').click();
+    });
+});
+
 /* -- LOGIN -- */
 document.getElementById('loginSubmit').addEventListener('click', async () => {
     const username = document.getElementById('loginUsername').value.trim();
