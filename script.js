@@ -262,11 +262,13 @@ document.getElementById('authBtn').addEventListener('click', () => {
 });
 
 /* -- ENTER KEY SUBMIT -- */
-document.getElementById('authLoginForm').addEventListener('submit', () => {
+document.getElementById('authLoginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
     document.getElementById('loginSubmit').click();
 });
 
-document.getElementById('authRegisterForm').addEventListener('submit', () => {
+document.getElementById('authRegisterForm').addEventListener('submit', (e) => {
+    e.preventDefault();
     document.getElementById('registerSubmit').click();
 });
 
