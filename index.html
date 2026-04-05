@@ -49,179 +49,182 @@
 </head>
 
 <body>
-    <!-- Background blobs -->
-    <div class="bg-blob blob-1"></div>
-    <div class="bg-blob blob-2"></div>
-    <div class="bg-blob blob-3"></div>
-
-    <div class="app-shell">
-        <!-- Header -->
-        <header class="glass-card header-card">
-            <div class="header-inner">
-                <div class="brand">
-                    <span class="brand-icon">⬛</span>
-                    <span class="brand-name">QR Maker</span>
-                </div>
-                <nav class="tab-nav" role="tablist">
-                    <button class="tab-btn active" data-tab="url" role="tab" aria-selected="true">🔗 URL</button>
-                    <button class="tab-btn" data-tab="text" role="tab" aria-selected="false">💬 Text</button>
-                    <button class="tab-btn" data-tab="contact" role="tab" aria-selected="false">👤 Contact</button>
-                    <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">🕑 History</button>
-                </nav>
+    <!-- ── TOP BAR ── -->
+    <header class="topbar glass">
+        <div class="topbar-inner">
+            <div class="brand">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" />
+                    <rect x="16" y="2" width="10" height="10" rx="2" fill="currentColor" />
+                    <rect x="2" y="16" width="10" height="10" rx="2" fill="currentColor" />
+                    <rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" />
+                    <rect x="22" y="16" width="4" height="4" rx="1" fill="currentColor" />
+                    <rect x="16" y="22" width="4" height="4" rx="1" fill="currentColor" />
+                    <rect x="22" y="22" width="4" height="4" rx="1" fill="currentColor" />
+                </svg>
+                <span>QR Generator</span>
             </div>
-        </header>
+            <div class="topbar-actions">
+                <button class="btn-icon" id="themeBtn" title="Choose theme" aria-label="Choose theme">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="4" />
+                        <path
+                            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                        </svg>
+                </button>
+                <button class="btn-primary" id="authBtn">Register / Login</button>
+            </div>
+        </div>
+    </header>
 
-        <!-- Main content -->
-        <main class="main-grid">
-            <!-- Left: Input Panel -->
-            <section class="glass-card input-panel">
-                <!-- URL Tab -->
-                <div id="tab-url" class="tab-pane active">
-                    <h2 class="panel-title">Enter URL</h2>
-                    <div class="field">
-                        <label for="url-input">Website URL</label>
-                        <input id="url-input" type="url" placeholder="https://example.com" autocomplete="url" />
-                        <span class="field-hint">Include https:// or we'll add it for you</span>
-                    </div>
-                </div>
+    <!-- ── MAIN ── -->
+    <main class="main-wrap">
+        <div class="hero-text">
+            <h1>QR Code Generator</h1>
+            <p>Generate QR codes for URLs, text, and contact cards — instantly.</p>
+        </div>
 
-                <!-- Text Tab -->
-                <div id="tab-text" class="tab-pane">
-                    <h2 class="panel-title">Enter Text</h2>
-                    <div class="field">
-                        <label for="text-input">Content</label>
-                        <textarea id="text-input" rows="5" placeholder="Type any text, message, or data..."></textarea>
-                    </div>
-                </div>
+        <div class="card glass">
 
-                <!-- Contact Tab -->
-                <div id="tab-contact" class="tab-pane">
-                    <h2 class="panel-title">Contact Info</h2>
-                    <div class="field-row">
-                        <div class="field">
-                            <label for="c-first">First Name</label>
-                            <input id="c-first" type="text" placeholder="John" />
-                        </div>
-                        <div class="field">
-                            <label for="c-last">Last Name</label>
-                            <input id="c-last" type="text" placeholder="Doe" />
-                        </div>
-                    </div>
-                    <div class="field">
-                        <label for="c-phone">Phone</label>
-                        <input id="c-phone" type="tel" placeholder="+65 9123 4567" />
-                    </div>
-                    <div class="field">
-                        <label for="c-email">Email</label>
-                        <input id="c-email" type="email" placeholder="john@example.com" />
-                    </div>
-                    <div class="field">
-                        <label for="c-org">Organisation</label>
-                        <input id="c-org" type="text" placeholder="Company Name" />
-                    </div>
-                    <div class="field">
-                        <label for="c-url">Website</label>
-                        <input id="c-url" type="url" placeholder="https://example.com" />
-                    </div>
-                </div>
+            <!-- TABS -->
+            <div class="tabs" role="tablist">
+                <button class="tab active" data-tab="url" role="tab">🔗 URL</button>
+                <button class="tab" data-tab="text" role="tab">💬 Text</button>
+                <button class="tab" data-tab="contact" role="tab">👤 Contact</button>
+            </div>
 
-                <!-- History Tab -->
-                <div id="tab-history" class="tab-pane">
-                    <div class="history-header">
-                        <h2 class="panel-title">Recent QR Codes</h2>
-                        <button id="clear-history-btn" class="btn-ghost btn-sm">Clear all</button>
+            <div class="card-body">
+
+                <!-- LEFT: FORM -->
+                <div class="form-section">
+
+                    <!-- URL PANEL -->
+                    <div class="panel active" id="panel-url">
+                        <label class="field-label">Website URL</label>
+                        <input class="field-input" id="urlInput" type="url"
+                            placeholder="example.com or https://example.com" />
+                        <p class="field-hint">https:// will be added automatically if missing.</p>
                     </div>
-                    <ul id="history-list" class="history-list">
-                        <li class="history-empty">No history yet. Generate a QR code to get started.</li>
-                    </ul>
-                </div>
 
-                <!-- Customisation (shown for url/text/contact tabs) -->
-                <div id="customisation-section">
-                    <hr class="divider" />
-                    <h3 class="section-subtitle">Customise</h3>
+                    <!-- TEXT PANEL -->
+                    <div class="panel" id="panel-text">
+                        <label class="field-label">Text Content</label>
+                        <textarea class="field-input" id="textInput" rows="5" placeholder="Enter any text…"></textarea>
+                    </div>
 
-                    <div class="field-row">
-                        <div class="field">
-                            <label for="dark-color">QR Colour</label>
-                            <div class="color-wrap">
-                                <input id="dark-color" type="color" value="#000000" />
-                                <span id="dark-color-hex" class="color-hex">#000000</span>
+                    <!-- CONTACT PANEL -->
+                    <div class="panel" id="panel-contact">
+                        <div class="grid-2">
+                            <div>
+                                <label class="field-label">First Name</label>
+                                <input class="field-input" id="cfn" type="text" placeholder="John" />
+                            </div>
+                            <div>
+                                <label class="field-label">Last Name</label>
+                                <input class="field-input" id="cln" type="text" placeholder="Doe" />
                             </div>
                         </div>
-                        <div class="field">
-                            <label for="light-color">Background</label>
-                            <div class="color-wrap">
-                                <input id="light-color" type="color" value="#ffffff" />
-                                <span id="light-color-hex" class="color-hex">#ffffff</span>
-                            </div>
+                        <label class="field-label">Phone</label>
+                        <input class="field-input" id="cph" type="tel" placeholder="+65 9123 4567" />
+                        <label class="field-label">Email</label>
+                        <input class="field-input" id="cem" type="email" placeholder="john@example.com" />
+                        <label class="field-label">Organisation</label>
+                        <input class="field-input" id="corg" type="text" placeholder="Company Name" />
+                        <label class="field-label">Website</label>
+                        <input class="field-input" id="curl" type="url" placeholder="https://example.com" />
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn-ghost" id="clearBtn">Clear</button>
+                        <button class="btn-primary" id="saveQrBtn" style="display:none">💾 Save QR</button>
+                    </div>
+                </div>
+
+                <!-- RIGHT: QR PREVIEW -->
+                <div class="preview-section">
+                    <div class="qr-frame glass" id="qrFrame">
+                        <div class="qr-placeholder" id="qrPlaceholder">
+                            <svg width="60" height="60" viewBox="0 0 28 28" fill="none" opacity="0.3">
+                                <rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" />
+                                <rect x="16" y="2" width="10" height="10" rx="2" fill="currentColor" />
+                                <rect x="2" y="16" width="10" height="10" rx="2" fill="currentColor" />
+                                <rect x="16" y="16" width="10" height="10" rx="2" fill="currentColor" />
+                            </svg>
+                            <p>Fill in the form to<br />generate your QR code</p>
                         </div>
+                        <canvas id="qrCanvas" style="display:none"></canvas>
                     </div>
-
-                    <div class="field">
-                        <label for="logo-upload">Logo (optional)</label>
-                        <div class="logo-drop-zone" id="logo-drop-zone">
-                            <input id="logo-upload" type="file" accept="image/*" hidden />
-                            <span id="logo-drop-label">Drop image or <button type="button" class="link-btn"
-                                    id="logo-browse-btn">browse</button></span>
-                            <button type="button" id="logo-clear-btn" class="btn-ghost btn-xs" hidden>✕ Remove</button>
-                        </div>
+                    <div class="qr-actions" id="qrActions" style="display:none">
+                        <button class="btn-primary" id="downloadBtn">⬇ Download</button>
+                        <button class="btn-ghost" id="copyDataBtn">📋 Copy Data</button>
                     </div>
-
-                    <div class="field">
-                        <label for="qr-size">Size: <span id="size-label">400px</span></label>
-                        <input id="qr-size" type="range" min="200" max="800" step="50" value="400" />
-                    </div>
-
-                    <div class="field-row format-row">
-                        <span class="field-label">Format</span>
-                        <label class="radio-pill">
-                            <input type="radio" name="fmt" value="png" checked /> PNG
-                        </label>
-                        <label class="radio-pill">
-                            <input type="radio" name="fmt" value="svg" /> SVG
-                        </label>
-                    </div>
-
-                    <button id="generate-btn" class="btn-primary btn-full">
-                        <span id="gen-btn-text">Generate QR Code</span>
-                        <span id="gen-spinner" class="spinner" hidden></span>
-                    </button>
-                </div>
-            </section>
-
-            <!-- Right: Output Panel -->
-            <section class="glass-card output-panel">
-                <h2 class="panel-title">Your QR Code</h2>
-
-                <div id="qr-placeholder" class="qr-placeholder">
-                    <div class="placeholder-icon">⬛</div>
-                    <p>Fill in the form and hit <strong>Generate</strong></p>
-                </div>
-
-                <div id="qr-result" hidden>
-                    <div class="qr-frame glass-inset">
-                        <img id="qr-img" src="" alt="Generated QR Code" />
-                    </div>
-                    <p id="qr-meta" class="qr-meta"></p>
-                    <div class="action-row">
-                        <button id="download-btn" class="btn-primary">⬇ Download</button>
-                        <button id="copy-btn" class="btn-secondary">📋 Copy Data</button>
+                    <div class="qr-data-box glass" id="qrDataBox" style="display:none">
+                        <pre id="qrDataPre"></pre>
                     </div>
                 </div>
 
-                <div id="qr-error" class="qr-error" hidden>
-                    <span>⚠️</span> <span id="qr-error-msg"></span>
-                </div>
-            </section>
-        </main>
+            </div>
+        </div>
 
-        <footer class="footer">
-            QR Maker &nbsp;·&nbsp; Stateless &amp; private &nbsp;·&nbsp; No data stored
-        </footer>
+        <p class="footer-note">No data stored without your consent · Free to use · Open for all</p>
+    </main>
+
+    <!-- ══ MODALS ══ -->
+
+    <!-- AUTH MODAL -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal glass" id="authModalBox">
+            <button class="modal-close" data-close="authModal">✕</button>
+            <div class="modal-tabs">
+                <button class="modal-tab active" data-auth="login">Login</button>
+                <button class="modal-tab" data-auth="register">Register</button>
+            </div>
+            <div id="authLoginForm">
+                <label class="field-label">Email</label>
+                <input class="field-input" id="loginEmail" type="email" placeholder="you@example.com" />
+                <label class="field-label">Password</label>
+                <input class="field-input" id="loginPassword" type="password" placeholder="••••••••" />
+                <button class="btn-primary full-width mt-16" id="loginSubmit">Login</button>
+            </div>
+            <div id="authRegisterForm" style="display:none">
+                <label class="field-label">Email</label>
+                <input class="field-input" id="regEmail" type="email" placeholder="you@example.com" />
+                <label class="field-label">Password</label>
+                <input class="field-input" id="regPassword" type="password" placeholder="min. 6 characters" />
+                <label class="field-label">Confirm Password</label>
+                <input class="field-input" id="regPassword2" type="password" placeholder="repeat password" />
+                <button class="btn-primary full-width mt-16" id="registerSubmit">Create Account</button>
+            </div>
+            <p class="auth-msg" id="authMsg"></p>
+        </div>
     </div>
 
-    <script src="/liquid-glass.js"></script>
+    <!-- MY QRs MODAL -->
+    <div class="modal-overlay" id="myQrModal">
+        <div class="modal modal-wide glass" id="myQrModalBox">
+            <button class="modal-close" data-close="myQrModal">✕</button>
+            <h2 class="modal-title">My QR Codes</h2>
+            <div id="myQrGrid" class="qr-grid">
+                <p class="empty-state">No saved QR codes yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- THEME PICKER MODAL -->
+    <div class="modal-overlay" id="themeModal">
+        <div class="modal modal-sm glass" id="themeModalBox">
+            <button class="modal-close" data-close="themeModal">✕</button>
+            <h2 class="modal-title">Choose Theme</h2>
+            <div class="theme-grid" id="themeGrid">
+                <!-- Injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 
     <script src="/script.js"></script>
 

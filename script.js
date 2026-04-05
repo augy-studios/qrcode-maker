@@ -1,371 +1,440 @@
-// ── Service Worker ────────────────────────────
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () =>
-        navigator.serviceWorker.register('/sw.js')
-        .then(r => console.log('SW registered', r.scope))
-        .catch(e => console.warn('SW failed', e))
-    );
+/* ═══════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════ */
+const THEMES = [{
+        id: 'classic',
+        label: 'Classic',
+        hex: '#ccffcc'
+    },
+    {
+        id: 'pink',
+        label: 'Not Green 1',
+        hex: '#ffcccc'
+    },
+    {
+        id: 'lavender',
+        label: 'Not Green 2',
+        hex: '#ccccff'
+    },
+    {
+        id: 'yellow',
+        label: 'Not Green 3',
+        hex: '#ffffcc'
+    },
+    {
+        id: 'rose',
+        label: 'Not Green 4',
+        hex: '#ffccff'
+    },
+    {
+        id: 'cyan',
+        label: 'Not Green 5',
+        hex: '#ccffff'
+    },
+    {
+        id: 'white',
+        label: 'Really Really Light',
+        hex: '#ffffff'
+    },
+];
+
+let currentTheme = localStorage.getItem('qr_theme') || 'classic';
+
+function applyTheme(id) {
+    document.documentElement.setAttribute('data-theme', id === 'classic' ? '' : id);
+    currentTheme = id;
+    localStorage.setItem('qr_theme', id);
+    renderThemeGrid();
 }
 
-// ── State ─────────────────────────────────────
-let activeTab = 'url';
-let logoDataUrl = null; // base64 of uploaded logo
-let lastResult = null; // { image, svg, format, data }
-const HISTORY_KEY = 'qrgen_history';
-const MAX_HISTORY = 20;
-
-// ── DOM refs ──────────────────────────────────
-const tabBtns = document.querySelectorAll('.tab-btn');
-const tabPanes = document.querySelectorAll('.tab-pane');
-const customSection = document.getElementById('customisation-section');
-const generateBtn = document.getElementById('generate-btn');
-const genBtnText = document.getElementById('gen-btn-text');
-const genSpinner = document.getElementById('gen-spinner');
-const darkColorEl = document.getElementById('dark-color');
-const lightColorEl = document.getElementById('light-color');
-const darkHexEl = document.getElementById('dark-color-hex');
-const lightHexEl = document.getElementById('light-color-hex');
-const sizeSlider = document.getElementById('qr-size');
-const sizeLabel = document.getElementById('size-label');
-const logoUpload = document.getElementById('logo-upload');
-const logoBrowseBtn = document.getElementById('logo-browse-btn');
-const logoClearBtn = document.getElementById('logo-clear-btn');
-const logoDropZone = document.getElementById('logo-drop-zone');
-const logoDropLabel = document.getElementById('logo-drop-label');
-const qrPlaceholder = document.getElementById('qr-placeholder');
-const qrResult = document.getElementById('qr-result');
-const qrImg = document.getElementById('qr-img');
-const qrMeta = document.getElementById('qr-meta');
-const downloadBtn = document.getElementById('download-btn');
-const copyBtn = document.getElementById('copy-btn');
-const qrError = document.getElementById('qr-error');
-const qrErrorMsg = document.getElementById('qr-error-msg');
-const historyList = document.getElementById('history-list');
-const clearHistoryBtn = document.getElementById('clear-history-btn');
-
-// ── Tab switching ─────────────────────────────
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        activeTab = tab;
-
-        tabBtns.forEach(b => {
-            b.classList.remove('active');
-            b.setAttribute('aria-selected', 'false');
+function renderThemeGrid() {
+    const grid = document.getElementById('themeGrid');
+    grid.innerHTML = THEMES.map(t => `
+    <div class="theme-option${t.id === currentTheme ? ' selected' : ''}" data-theme-id="${t.id}">
+      <span class="theme-swatch" style="background:${t.hex}"></span>
+      ${t.label}
+    </div>`).join('');
+    grid.querySelectorAll('.theme-option').forEach(el => {
+        el.addEventListener('click', () => {
+            applyTheme(el.dataset.themeId);
+            closeModal('themeModal');
         });
-        tabPanes.forEach(p => p.classList.remove('active'));
+    });
+}
+applyTheme(currentTheme);
 
+/* ═══════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════ */
+let activeTab = 'url';
+
+document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
-        document.getElementById(`tab-${tab}`).classList.add('active');
-
-        // Hide customisation panel on history tab
-        customSection.style.display = tab === 'history' ? 'none' : '';
-
-        if (tab === 'history') renderHistory();
+        activeTab = btn.dataset.tab;
+        document.getElementById(`panel-${activeTab}`).classList.add('active');
+        updateQR();
     });
 });
 
-// ── Colour pickers ────────────────────────────
-darkColorEl.addEventListener('input', () => {
-    darkHexEl.textContent = darkColorEl.value;
-});
-lightColorEl.addEventListener('input', () => {
-    lightHexEl.textContent = lightColorEl.value;
-});
+/* ═══════════════════════════════════════════
+   QR GENERATION
+═══════════════════════════════════════════ */
+let qrInstance = null;
+let currentData = '';
 
-// ── Size slider ───────────────────────────────
-sizeSlider.addEventListener('input', () => {
-    sizeLabel.textContent = sizeSlider.value + 'px';
-});
-
-// ── Logo upload / drag-drop ───────────────────
-logoBrowseBtn.addEventListener('click', () => logoUpload.click());
-logoDropZone.addEventListener('click', e => {
-    if (e.target !== logoClearBtn) logoUpload.click();
-});
-
-logoUpload.addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (file) loadLogo(file);
-});
-
-logoDropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    logoDropZone.classList.add('drag-over');
-});
-logoDropZone.addEventListener('dragleave', () => logoDropZone.classList.remove('drag-over'));
-logoDropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    logoDropZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) loadLogo(file);
-});
-
-logoClearBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    logoDataUrl = null;
-    logoUpload.value = '';
-    logoDropLabel.innerHTML = 'Drop image or <button type="button" class="link-btn" id="logo-browse-btn">browse</button>';
-    document.getElementById('logo-browse-btn').addEventListener('click', () => logoUpload.click());
-    logoClearBtn.hidden = true;
-    logoDropZone.classList.remove('has-logo');
-});
-
-function loadLogo(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-        logoDataUrl = e.target.result;
-        logoDropLabel.textContent = `✓ ${file.name}`;
-        logoClearBtn.hidden = false;
-        logoDropZone.classList.add('has-logo');
-    };
-    reader.readAsDataURL(file);
+function getFormData() {
+    switch (activeTab) {
+        case 'url': {
+            let v = document.getElementById('urlInput').value.trim();
+            if (v && !v.match(/^https?:\/\//)) v = 'https://' + v;
+            return v;
+        }
+        case 'text':
+            return document.getElementById('textInput').value.trim();
+        case 'contact': {
+            const fn = document.getElementById('cfn').value.trim();
+            const ln = document.getElementById('cln').value.trim();
+            const ph = document.getElementById('cph').value.trim();
+            const em = document.getElementById('cem').value.trim();
+            const org = document.getElementById('corg').value.trim();
+            const url = document.getElementById('curl').value.trim();
+            if (!fn && !ln && !ph && !em) return '';
+            return `BEGIN:VCARD\nVERSION:3.0\nFN:${fn} ${ln}\nN:${ln};${fn};;;\nORG:${org}\nTEL:${ph}\nEMAIL:${em}\nURL:${url}\nEND:VCARD`;
+        }
+    }
+    return '';
 }
 
-// ── Build QR data string ──────────────────────
-function buildData() {
-    if (activeTab === 'url') {
-        let v = document.getElementById('url-input').value.trim();
-        if (!v) return null;
-        if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
-        return v;
-    }
-    if (activeTab === 'text') {
-        const v = document.getElementById('text-input').value.trim();
-        return v || null;
-    }
-    if (activeTab === 'contact') {
-        const fn = document.getElementById('c-first').value.trim();
-        const ln = document.getElementById('c-last').value.trim();
-        const ph = document.getElementById('c-phone').value.trim();
-        const em = document.getElementById('c-email').value.trim();
-        const og = document.getElementById('c-org').value.trim();
-        const ur = document.getElementById('c-url').value.trim();
-        if (!fn && !ln && !ph && !em) return null;
-        return `BEGIN:VCARD\nVERSION:3.0\nFN:${fn} ${ln}\nN:${ln};${fn};;;\nORG:${og}\nTEL:${ph}\nEMAIL:${em}\nURL:${ur}\nEND:VCARD`;
-    }
-    return null;
-}
+function updateQR() {
+    currentData = getFormData();
+    const canvas = document.getElementById('qrCanvas');
+    const ph = document.getElementById('qrPlaceholder');
+    const actions = document.getElementById('qrActions');
+    const dataBox = document.getElementById('qrDataBox');
+    const saveBtn = document.getElementById('saveQrBtn');
 
-// ── Generate ──────────────────────────────────
-generateBtn.addEventListener('click', generate);
-
-async function generate() {
-    const data = buildData();
-    if (!data) {
-        showError('Please fill in at least one field.');
+    if (!currentData) {
+        canvas.style.display = 'none';
+        ph.style.display = 'block';
+        actions.style.display = 'none';
+        dataBox.style.display = 'none';
+        saveBtn.style.display = 'none';
         return;
     }
 
-    setLoading(true);
-    hideError();
+    canvas.style.display = 'block';
+    ph.style.display = 'none';
+    actions.style.display = 'flex';
+    dataBox.style.display = 'block';
+    saveBtn.style.display = currentUser ? 'block' : 'none';
 
-    const fmt = document.querySelector('input[name="fmt"]:checked').value;
+    if (!qrInstance) {
+        qrInstance = new QRious({
+            element: canvas,
+            size: 300,
+            level: 'M'
+        });
+    }
+    qrInstance.value = currentData;
+    document.getElementById('qrDataPre').textContent = currentData;
+}
 
-    const body = {
-        data,
-        format: fmt,
-        darkColor: darkColorEl.value,
-        lightColor: lightColorEl.value,
-        size: parseInt(sizeSlider.value),
-        ...(logoDataUrl ? {
-            logoUrl: logoDataUrl
-        } : {})
-    };
+// Live input listeners
+['urlInput', 'textInput', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateQR);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+    ['urlInput', 'textInput', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    updateQR();
+});
+
+/* ═══════════════════════════════════════════
+   DOWNLOAD
+═══════════════════════════════════════════ */
+document.getElementById('downloadBtn').addEventListener('click', () => {
+    const canvas = document.getElementById('qrCanvas');
+    const a = document.createElement('a');
+    a.download = `qr-${activeTab}-${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+});
+
+/* ═══════════════════════════════════════════
+   COPY DATA
+═══════════════════════════════════════════ */
+document.getElementById('copyDataBtn').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(currentData).catch(() => {});
+    showToast('Data copied to clipboard!');
+});
+
+/* ═══════════════════════════════════════════
+   MODALS
+═══════════════════════════════════════════ */
+function openModal(id) {
+    document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) closeModal(overlay.id);
+    });
+});
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+    renderThemeGrid();
+    openModal('themeModal');
+});
+
+/* ═══════════════════════════════════════════
+   AUTH TABS (inside modal)
+═══════════════════════════════════════════ */
+document.querySelectorAll('.modal-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.dataset.auth;
+        document.getElementById('authLoginForm').style.display = mode === 'login' ? 'block' : 'none';
+        document.getElementById('authRegisterForm').style.display = mode === 'register' ? 'block' : 'none';
+        document.getElementById('authMsg').textContent = '';
+    });
+});
+
+/* ═══════════════════════════════════════════
+   AUTH STATE
+═══════════════════════════════════════════ */
+let currentUser = null;
+
+function setAuthBtn() {
+    const btn = document.getElementById('authBtn');
+    if (currentUser) {
+        btn.textContent = '📁 My QRs';
+        document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
+    } else {
+        btn.textContent = 'Register / Login';
+        document.getElementById('saveQrBtn').style.display = 'none';
+    }
+}
+
+document.getElementById('authBtn').addEventListener('click', () => {
+    if (currentUser) {
+        loadMyQRs();
+        openModal('myQrModal');
+    } else {
+        openModal('authModal');
+    }
+});
+
+/* ═══════════════════════════════════════════
+   LOGIN
+═══════════════════════════════════════════ */
+document.getElementById('loginSubmit').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const msg = document.getElementById('authMsg');
+    msg.className = 'auth-msg';
+    msg.textContent = 'Logging in…';
 
     try {
-        const res = await fetch('/api/qr', {
+        const res = await fetch('/api/auth', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify({
+                action: 'login',
+                email,
+                password
+            }),
         });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-            showError(json.error || 'Server error. Please try again.');
-            setLoading(false);
-            return;
-        }
-
-        lastResult = {
-            ...json,
-            format: fmt,
-            data
-        };
-        displayResult(lastResult);
-        addToHistory(lastResult);
-    } catch (err) {
-        showError('Network error. Are you offline?');
-    } finally {
-        setLoading(false);
-    }
-}
-
-// ── Display result ────────────────────────────
-function displayResult(result) {
-    qrPlaceholder.hidden = true;
-    qrResult.hidden = false;
-    hideError();
-
-    if (result.format === 'svg') {
-        // Render SVG inline
-        const blob = new Blob([result.svg], {
-            type: 'image/svg+xml'
-        });
-        const url = URL.createObjectURL(blob);
-        qrImg.src = url;
-    } else {
-        qrImg.src = result.image;
-    }
-
-    // Truncate meta label
-    const label = result.data.length > 60 ? result.data.slice(0, 57) + '…' : result.data;
-    qrMeta.textContent = label;
-}
-
-// ── Download ──────────────────────────────────
-downloadBtn.addEventListener('click', () => {
-    if (!lastResult) return;
-    const fmt = lastResult.format;
-    const ext = fmt === 'svg' ? 'svg' : 'png';
-    const mime = fmt === 'svg' ? 'image/svg+xml' : 'image/png';
-
-    let href;
-    if (fmt === 'svg') {
-        href = URL.createObjectURL(new Blob([lastResult.svg], {
-            type: mime
-        }));
-    } else {
-        href = lastResult.image;
-    }
-
-    const a = document.createElement('a');
-    a.href = href;
-    a.download = `qrcode-${Date.now()}.${ext}`;
-    a.click();
-});
-
-// ── Copy data ─────────────────────────────────
-copyBtn.addEventListener('click', async () => {
-    if (!lastResult) return;
-    try {
-        await navigator.clipboard.writeText(lastResult.data);
-        copyBtn.textContent = '✓ Copied!';
-        setTimeout(() => {
-            copyBtn.textContent = '📋 Copy Data';
-        }, 2000);
-    } catch {
-        copyBtn.textContent = '✗ Failed';
-        setTimeout(() => {
-            copyBtn.textContent = '📋 Copy Data';
-        }, 2000);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+        currentUser = data.user;
+        localStorage.setItem('qr_session', data.token);
+        closeModal('authModal');
+        setAuthBtn();
+        showToast('Welcome back!');
+    } catch (e) {
+        msg.className = 'auth-msg error';
+        msg.textContent = e.message;
     }
 });
 
-// ── History ───────────────────────────────────
-function loadHistory() {
-    try {
-        return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    } catch {
-        return [];
+/* ═══════════════════════════════════════════
+   REGISTER
+═══════════════════════════════════════════ */
+document.getElementById('registerSubmit').addEventListener('click', async () => {
+    const email = document.getElementById('regEmail').value.trim();
+    const pw = document.getElementById('regPassword').value;
+    const pw2 = document.getElementById('regPassword2').value;
+    const msg = document.getElementById('authMsg');
+    msg.className = 'auth-msg';
+
+    if (pw !== pw2) {
+        msg.className = 'auth-msg error';
+        msg.textContent = 'Passwords do not match.';
+        return;
     }
-}
-
-function saveHistory(items) {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-}
-
-function addToHistory(result) {
-    const items = loadHistory();
-    const entry = {
-        id: Date.now(),
-        data: result.data,
-        image: result.image || null, // SVG history stores null thumbnail
-        format: result.format,
-        ts: new Date().toLocaleString()
-    };
-    items.unshift(entry);
-    if (items.length > MAX_HISTORY) items.length = MAX_HISTORY;
-    saveHistory(items);
-}
-
-function renderHistory() {
-    const items = loadHistory();
-    historyList.innerHTML = '';
-
-    if (!items.length) {
-        historyList.innerHTML = '<li class="history-empty">No history yet. Generate a QR code to get started.</li>';
+    if (pw.length < 6) {
+        msg.className = 'auth-msg error';
+        msg.textContent = 'Password must be at least 6 characters.';
         return;
     }
 
-    items.forEach(item => {
-        const li = document.createElement('li');
-        li.className = 'history-item';
-        li.innerHTML = `
-      ${item.image ? `<img src="${item.image}" alt="QR thumbnail" />` : `<div style="width:44px;height:44px;background:#f0fff4;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">⬛</div>`}
-      <div class="history-info">
-        <div class="history-label">${escHtml(item.data.slice(0, 60))}${item.data.length > 60 ? '…' : ''}</div>
-        <div class="history-meta">${item.format.toUpperCase()} · ${item.ts}</div>
-      </div>
-      <button class="history-del" data-id="${item.id}" title="Remove">✕</button>
-    `;
-        // Click row to reload
-        li.addEventListener('click', e => {
-            if (e.target.classList.contains('history-del')) return;
-            if (item.image) {
-                lastResult = {
-                    image: item.image,
-                    format: item.format,
-                    data: item.data
-                };
-                displayResult(lastResult);
-                // Switch to url tab to show result
-                tabBtns[0].click();
-            }
+    msg.textContent = 'Creating account…';
+    try {
+        const res = await fetch('/api/auth', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'register',
+                email,
+                password: pw
+            }),
         });
-        li.querySelector('.history-del').addEventListener('click', e => {
-            e.stopPropagation();
-            deleteHistoryItem(item.id);
-        });
-        historyList.appendChild(li);
-    });
-}
-
-function deleteHistoryItem(id) {
-    const items = loadHistory().filter(i => i.id !== id);
-    saveHistory(items);
-    renderHistory();
-}
-
-clearHistoryBtn.addEventListener('click', () => {
-    if (confirm('Clear all history?')) {
-        localStorage.removeItem(HISTORY_KEY);
-        renderHistory();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Registration failed');
+        msg.className = 'auth-msg success';
+        msg.textContent = 'Account created! Please check your email to confirm.';
+    } catch (e) {
+        msg.className = 'auth-msg error';
+        msg.textContent = e.message;
     }
 });
 
-// ── Helpers ───────────────────────────────────
-function setLoading(on) {
-    generateBtn.disabled = on;
-    genBtnText.textContent = on ? 'Generating…' : 'Generate QR Code';
-    genSpinner.hidden = !on;
+/* ═══════════════════════════════════════════
+   SESSION RESTORE
+═══════════════════════════════════════════ */
+(async () => {
+    const token = localStorage.getItem('qr_session');
+    if (!token) return;
+    try {
+        const res = await fetch('/api/auth', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'me',
+                token
+            }),
+        });
+        if (!res.ok) {
+            localStorage.removeItem('qr_session');
+            return;
+        }
+        const data = await res.json();
+        currentUser = data.user;
+        setAuthBtn();
+    } catch {}
+})();
+
+/* ═══════════════════════════════════════════
+   SAVE QR
+═══════════════════════════════════════════ */
+document.getElementById('saveQrBtn').addEventListener('click', async () => {
+    if (!currentUser || !currentData) return;
+    const canvas = document.getElementById('qrCanvas');
+
+    canvas.toBlob(async blob => {
+        const formData = new FormData();
+        formData.append('image', blob, 'qr.webp');
+        formData.append('data', currentData);
+        formData.append('type', activeTab);
+        formData.append('token', localStorage.getItem('qr_session'));
+
+        try {
+            const res = await fetch('/api/qr-save', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error((await res.json()).error);
+            showToast('QR saved!');
+        } catch (e) {
+            showToast('Save failed: ' + e.message);
+        }
+    }, 'image/webp', 0.85);
+});
+
+/* ═══════════════════════════════════════════
+   MY QRs
+═══════════════════════════════════════════ */
+async function loadMyQRs() {
+    const grid = document.getElementById('myQrGrid');
+    grid.innerHTML = '<p class="empty-state">Loading…</p>';
+    const token = localStorage.getItem('qr_session');
+    try {
+        const res = await fetch(`/api/qr-list?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        if (!data.qrs || !data.qrs.length) {
+            grid.innerHTML = '<p class="empty-state">No saved QR codes yet.</p>';
+            return;
+        }
+        grid.innerHTML = data.qrs.map(q => `
+      <div class="qr-card" data-id="${q.id}">
+        <img src="${q.image_url}" alt="QR Code" loading="lazy" />
+        <div class="qr-card-label">${escHtml(q.data_preview)}</div>
+        <div class="qr-card-actions">
+          <a href="${q.image_url}" download="qr-${q.id}.webp" class="btn-ghost" style="text-align:center;font-size:.72rem;padding:5px">⬇</a>
+          <button class="btn-ghost" onclick="deleteQR('${q.id}')">🗑</button>
+        </div>
+      </div>`).join('');
+    } catch {
+        grid.innerHTML = '<p class="empty-state">Failed to load.</p>';
+    }
 }
 
-function showError(msg) {
-    qrError.hidden = false;
-    qrErrorMsg.textContent = msg;
-    qrResult.hidden = true;
-    qrPlaceholder.hidden = false;
+window.deleteQR = async (id) => {
+    const token = localStorage.getItem('qr_session');
+    await fetch('/api/qr-delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            id,
+            token
+        }),
+    });
+    loadMyQRs();
+};
+
+function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function hideError() {
-    qrError.hidden = true;
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+let toastTimer;
+
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
-function escHtml(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/* ═══════════════════════════════════════════
+   SERVICE WORKER
+═══════════════════════════════════════════ */
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

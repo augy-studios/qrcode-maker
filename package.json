@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "description": "QR Maker by UwU Apps - A simple QR code generator with customization options.",
     "dependencies": {
-        "qrcode": "^1.5.3",
+        "@supabase/supabase-js": "^2.43.0",
+        "formidable": "^3.5.1",
         "sharp": "^0.33.4"
     }
 }
