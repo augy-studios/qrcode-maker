@@ -238,7 +238,7 @@ document.getElementById('authBtn').addEventListener('click', () => {
 
 /* -- LOGIN -- */
 document.getElementById('loginSubmit').addEventListener('click', async () => {
-    const email = document.getElementById('loginEmail').value.trim();
+    const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     const msg = document.getElementById('authMsg');
     msg.className = 'auth-msg';
@@ -252,7 +252,7 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
             },
             body: JSON.stringify({
                 action: 'login',
-                email,
+                username,
                 password
             }),
         });
@@ -271,12 +271,18 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
 
 /* -- REGISTER -- */
 document.getElementById('registerSubmit').addEventListener('click', async () => {
+    const username = document.getElementById('regUsername').value.trim();
     const email = document.getElementById('regEmail').value.trim();
     const pw = document.getElementById('regPassword').value;
     const pw2 = document.getElementById('regPassword2').value;
     const msg = document.getElementById('authMsg');
     msg.className = 'auth-msg';
 
+    if (!username) {
+        msg.className = 'auth-msg error';
+        msg.textContent = 'Please choose a username.';
+        return;
+    }
     if (pw !== pw2) {
         msg.className = 'auth-msg error';
         msg.textContent = 'Passwords do not match.';
@@ -297,6 +303,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
             },
             body: JSON.stringify({
                 action: 'register',
+                username,
                 email,
                 password: pw
             }),
