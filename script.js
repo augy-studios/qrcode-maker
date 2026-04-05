@@ -424,6 +424,16 @@ function showToast(msg) {
     toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
+/* -- PASSWORD TOGGLES -- */
+document.querySelectorAll('.pw-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const input = btn.previousElementSibling;
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        btn.textContent = showing ? '👁' : '🙈';
+    });
+});
+
 /* -- SERVICE WORKER -- */
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

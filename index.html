@@ -202,7 +202,10 @@
                 <label class="field-label">Username</label>
                 <input class="field-input" id="loginUsername" type="text" placeholder="your username" autocomplete="username" />
                 <label class="field-label">Password</label>
-                <input class="field-input" id="loginPassword" type="password" placeholder="••••••••" />
+                <div class="pw-wrap">
+                    <input class="field-input" id="loginPassword" type="password" placeholder="••••••••" />
+                    <button type="button" class="pw-toggle" aria-label="Toggle password visibility">👁</button>
+                </div>
                 <button class="btn-primary full-width mt-16" id="loginSubmit">Login</button>
             </div>
             <div id="authRegisterForm" style="display:none">
@@ -211,9 +214,15 @@
                 <label class="field-label">Email</label>
                 <input class="field-input" id="regEmail" type="email" placeholder="you@example.com" autocomplete="email" />
                 <label class="field-label">Password</label>
-                <input class="field-input" id="regPassword" type="password" placeholder="min. 6 characters" />
+                <div class="pw-wrap">
+                    <input class="field-input" id="regPassword" type="password" placeholder="min. 6 characters" />
+                    <button type="button" class="pw-toggle" aria-label="Toggle password visibility">👁</button>
+                </div>
                 <label class="field-label">Confirm Password</label>
-                <input class="field-input" id="regPassword2" type="password" placeholder="repeat password" />
+                <div class="pw-wrap">
+                    <input class="field-input" id="regPassword2" type="password" placeholder="repeat password" />
+                    <button type="button" class="pw-toggle" aria-label="Toggle password visibility">👁</button>
+                </div>
                 <button class="btn-primary full-width mt-16" id="registerSubmit">Create Account</button>
             </div>
             <p class="auth-msg" id="authMsg"></p>
