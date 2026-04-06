@@ -31,7 +31,7 @@ const THEMES = [{
     },
     {
         id: 'white',
-        label: 'Really Really Light',
+        label: 'Really Really Light Green',
         hex: '#ffffff'
     },
 ];
