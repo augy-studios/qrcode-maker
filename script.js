@@ -97,6 +97,26 @@ function getFormData() {
             const esc = s => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/"/g, '\\"');
             return `WIFI:T:${sec};S:${esc(ssid)};P:${esc(pass)};H:${hidden};;`;
         }
+        case 'calendar': {
+            const title = document.getElementById('evtitle').value.trim();
+            if (!title) return '';
+            const toIcal = (dtStr) => {
+                if (!dtStr) return '';
+                return dtStr.replace(/[-:]/g, '').replace('T', 'T');
+            };
+            const start = toIcal(document.getElementById('evstart').value);
+            const end = toIcal(document.getElementById('evend').value);
+            const loc = document.getElementById('evloc').value.trim();
+            const desc = document.getElementById('evdesc').value.trim();
+            const uid = `qrmaker-${Date.now()}@uwuapps`;
+            let ical = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:${uid}\nSUMMARY:${title}`;
+            if (start) ical += `\nDTSTART:${start}`;
+            if (end) ical += `\nDTEND:${end}`;
+            if (loc) ical += `\nLOCATION:${loc}`;
+            if (desc) ical += `\nDESCRIPTION:${desc}`;
+            ical += `\nEND:VEVENT\nEND:VCALENDAR`;
+            return ical;
+        }
         case 'contact': {
             const fn = document.getElementById('cfn').value.trim();
             const ln = document.getElementById('cln').value.trim();
@@ -146,7 +166,7 @@ function updateQR() {
 }
 
 // Live input listeners
-['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl', 'evtitle', 'evstart', 'evend', 'evloc', 'evdesc'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updateQR);
 });
@@ -154,7 +174,7 @@ document.getElementById('wsec').addEventListener('change', updateQR);
 document.getElementById('whidden').addEventListener('change', updateQR);
 
 document.getElementById('clearBtn').addEventListener('click', () => {
-    ['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl'].forEach(id => {
+    ['urlInput', 'textInput', 'wssid', 'wpass', 'cfn', 'cln', 'cph', 'cem', 'corg', 'curl', 'evtitle', 'evstart', 'evend', 'evloc', 'evdesc'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });

@@ -112,6 +112,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
                     WiFi
                 </button>
+                <button class="tab" data-tab="calendar" role="tab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    Event
+                </button>
             </div>
 
             <div class="card-body">
@@ -142,6 +146,7 @@
                         <label class="field-label">Security</label>
                         <select class="field-input" id="wsec">
                             <option value="WPA">WPA / WPA2</option>
+                            <option value="WPA3">WPA3</option>
                             <option value="WEP">WEP</option>
                             <option value="nopass">None (open)</option>
                         </select>
@@ -149,6 +154,26 @@
                             <input type="checkbox" id="whidden" style="width:auto;accent-color:var(--brand-dark)" />
                             Hidden network
                         </label>
+                    </div>
+
+                    <!-- CALENDAR PANEL -->
+                    <div class="panel" id="panel-calendar">
+                        <label class="field-label">Event Title</label>
+                        <input class="field-input" id="evtitle" type="text" placeholder="Team Meeting" />
+                        <div class="grid-2">
+                            <div>
+                                <label class="field-label">Start Date & Time</label>
+                                <input class="field-input" id="evstart" type="datetime-local" />
+                            </div>
+                            <div>
+                                <label class="field-label">End Date & Time</label>
+                                <input class="field-input" id="evend" type="datetime-local" />
+                            </div>
+                        </div>
+                        <label class="field-label">Location</label>
+                        <input class="field-input" id="evloc" type="text" placeholder="Conference Room A" />
+                        <label class="field-label">Description</label>
+                        <textarea class="field-input" id="evdesc" rows="3" placeholder="Optional details…"></textarea>
                     </div>
 
                     <!-- CONTACT PANEL -->
