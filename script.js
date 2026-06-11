@@ -76,7 +76,6 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 /* -- QR GENERATION -- */
-let qrInstance = null;
 let currentData = '';
 
 function getFormData() {
@@ -131,7 +130,7 @@ function getFormData() {
     return '';
 }
 
-function updateQR() {
+async function updateQR() {
     currentData = getFormData();
     const canvas = document.getElementById('qrCanvas');
     const ph = document.getElementById('qrPlaceholder');
@@ -154,14 +153,33 @@ function updateQR() {
     dataBox.style.display = 'block';
     saveBtn.style.display = currentUser ? 'block' : 'none';
 
-    if (!qrInstance) {
-        qrInstance = new QRious({
-            element: canvas,
-            size: 300,
-            level: 'M'
-        });
-    }
-    qrInstance.value = currentData;
+    await QRCode.toCanvas(canvas, currentData, {
+        width: 300,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#000000', light: '#ffffff' }
+    });
+
+    await document.fonts.load('bold 28px Jua');
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;
+    const fontSize = Math.round(size * 0.092);
+    ctx.font = `bold ${fontSize}px Jua, sans-serif`;
+    const textW = ctx.measureText('uwu').width;
+    const textH = fontSize;
+    const pad = Math.round(size * 0.028);
+    const boxW = textW + pad * 2;
+    const boxH = textH + pad * 2;
+    const cx = size / 2;
+    const cy = size / 2;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.round(cx - boxW / 2), Math.round(cy - boxH / 2), Math.round(boxW), Math.round(boxH));
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('uwu', cx, cy);
+
     document.getElementById('qrDataPre').textContent = currentData;
 }
 
