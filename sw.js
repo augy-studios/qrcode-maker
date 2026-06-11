@@ -1,4 +1,4 @@
-const CACHE = "uwuqr-offline-v2";
+const CACHE = "uwuqr-offline-v3";
 
 const ASSETS = [
   "/",
