@@ -1,13 +1,16 @@
-const CACHE = "uwuqr-offline-v3";
+const CACHE = "uwuqr-v1";
 
 const ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/script.js",
-  "/icons/qrmakericon1.png",
+  "/qrcode.min.js",
+  "/manifest.json",
   "/favicon.ico",
-  "/manifest.json"
+  "/icons/qrmakericon1.png",
+  "/images/screenshot_1.png",
+  "/images/screenshot_2.png"
 ];
 
 self.addEventListener("install", (event) => {

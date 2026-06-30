@@ -279,12 +279,13 @@ async function triggerPasswordSave(username, password) {
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
     const token = localStorage.getItem('qr_session');
-    await fetch('/api/auth', {
+    await UwuSigning.signedFetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout', token }),
     }).catch(() => {});
     localStorage.removeItem('qr_session');
+    UwuSigning.clearSigningKey();
     currentUser = null;
     setAuthBtn();
     showToast('Logged out.');
@@ -334,6 +335,7 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
         if (!res.ok) throw new Error(data.error || 'Login failed');
         currentUser = data.user;
         localStorage.setItem('qr_session', data.token);
+        UwuSigning.storeSigningKey(data.signing_key, data.key_id, true);
         triggerPasswordSave(username, password);
         closeModal('authModal');
         setAuthBtn();
@@ -388,6 +390,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
         triggerPasswordSave(username, pw);
         currentUser = { id: data.session.userId, username: data.username };
         localStorage.setItem('qr_session', data.session.token);
+        UwuSigning.storeSigningKey(data.signing_key, data.key_id, true);
         closeModal('authModal');
         setAuthBtn();
         showToast('Account created! Welcome, ' + username + '!');
@@ -402,7 +405,7 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
     const token = localStorage.getItem('qr_session');
     if (!token) return;
     try {
-        const res = await fetch('/api/auth', {
+        const res = await UwuSigning.signedFetch('/api/auth', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -429,7 +432,7 @@ document.getElementById('saveQrBtn').addEventListener('click', async () => {
     const imageDataUrl = canvas.toDataURL('image/png');
 
     try {
-        const res = await fetch('/api/qr-save', {
+        const res = await UwuSigning.signedFetch('/api/qr-save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -452,7 +455,7 @@ async function loadMyQRs() {
     grid.innerHTML = '<p class="empty-state">Loading…</p>';
     const token = localStorage.getItem('qr_session');
     try {
-        const res = await fetch(`/api/qr-list?token=${encodeURIComponent(token)}`);
+        const res = await UwuSigning.signedFetch(`/api/qr-list?token=${encodeURIComponent(token)}`);
         const data = await res.json();
         if (!data.qrs || !data.qrs.length) {
             grid.innerHTML = '<p class="empty-state">No saved QR codes yet.</p>';
@@ -474,7 +477,7 @@ async function loadMyQRs() {
 
 window.deleteQR = async (id) => {
     const token = localStorage.getItem('qr_session');
-    await fetch('/api/qr-delete', {
+    await UwuSigning.signedFetch('/api/qr-delete', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
