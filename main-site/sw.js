@@ -1,10 +1,13 @@
-const CACHE = "uwuqr-v2";
+const CACHE = "uwuqr-v3";
 
 const ASSETS = [
   "/",
   "/index.html",
   "/style.css",
   "/script.js",
+  "/js/theme.js",
+  "/js/icons.js",
+  "/js/ui.js",
   "/qrcode.min.js",
   "/manifest.json",
   "/favicon.ico",

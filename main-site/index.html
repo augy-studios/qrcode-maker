@@ -2,6 +2,27 @@
 <html lang="en">
 
 <head>
+    <!-- Apply the saved theme before first paint -->
+    <script>
+        (function () {
+            var k = "qrmaker";
+            var legacy = {
+                classic: "classic",
+                pink: "not-green-1",
+                lavender: "not-green-2",
+                yellow: "not-green-3",
+                rose: "not-green-4",
+                cyan: "not-green-5",
+                white: "really-light-green"
+            };
+            var m = localStorage.getItem(k + ".mode") || "light";
+            var c = localStorage.getItem(k + ".colorTheme") ||
+                legacy[localStorage.getItem("qr_theme")] || "classic";
+            document.documentElement.setAttribute("data-mode", m);
+            document.documentElement.setAttribute("data-color-theme", c);
+        })();
+    </script>
+
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-FMCYFTFPEL"></script>
     <script>
@@ -23,13 +44,14 @@
     <title>QR Maker | UwU Apps</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="The QR Maker that will show up in sharing options.">
+    <meta name="theme-color" content="#ccffcc" />
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="QR Maker | UwU Apps" />
     <meta property="og:site_name" content="UwU Apps" />
     <meta property="og:description" content="The QR Maker that will show up in sharing options." />
 
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Jua">
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css">
 
     <!-- Embed Image -->
@@ -43,8 +65,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <script defer="" src="https://use.fontawesome.com/releases/v6.5.2/js/all.js"></script>
     <link rel="preload" href="/qrcode.min.js" as="script" />
 </head>
 
@@ -53,32 +73,20 @@
     <header class="topbar glass">
         <div class="topbar-inner">
             <div class="brand">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                    <rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" />
-                    <rect x="16" y="2" width="10" height="10" rx="2" fill="currentColor" />
-                    <rect x="2" y="16" width="10" height="10" rx="2" fill="currentColor" />
-                    <rect x="16" y="16" width="4" height="4" rx="1" fill="currentColor" />
-                    <rect x="22" y="16" width="4" height="4" rx="1" fill="currentColor" />
-                    <rect x="16" y="22" width="4" height="4" rx="1" fill="currentColor" />
-                    <rect x="22" y="22" width="4" height="4" rx="1" fill="currentColor" />
-                </svg>
+                <span data-icon="qr"></span>
                 <span>QR Maker</span>
             </div>
             <div class="topbar-actions">
-                <button class="btn-icon" id="themeBtn" title="Choose theme" aria-label="Choose theme">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="4" />
-                        <path
-                            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-                        </svg>
+                <button class="icon-btn" id="themeBtn" type="button" aria-label="Theme">
+                    <span data-icon="sun"></span>
                 </button>
                 <button class="btn-primary" id="authBtn">Register / Login</button>
-                <a class="btn-ghost" id="coffeeBtn" href="https://donate.stripe.com/28o2akeAr3hv0DK6oo" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+                <a class="btn-ghost" id="coffeeBtn" href="https://donate.stripe.com/28o2akeAr3hv0DK6oo" target="_blank" rel="noopener" style="text-decoration:none">
+                    <span data-icon="coffee"></span>
                     Buy Augy a Coffee
                 </a>
                 <button class="btn-ghost" id="logoutBtn" style="display:none">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    <span data-icon="logout"></span>
                     Log out
                 </button>
             </div>
@@ -97,23 +105,23 @@
             <!-- TABS -->
             <div class="tabs" role="tablist">
                 <button class="tab active" data-tab="url" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span data-icon="link"></span>
                     URL
                 </button>
                 <button class="tab" data-tab="text" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span data-icon="message"></span>
                     Text
                 </button>
                 <button class="tab" data-tab="contact" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span data-icon="user"></span>
                     Contact
                 </button>
                 <button class="tab" data-tab="wifi" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+                    <span data-icon="wifi"></span>
                     WiFi
                 </button>
                 <button class="tab" data-tab="calendar" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span data-icon="calendar"></span>
                     Event
                 </button>
             </div>
@@ -151,7 +159,7 @@
                             <option value="nopass">None (open)</option>
                         </select>
                         <label class="field-label" style="flex-direction:row;display:flex;align-items:center;gap:8px;margin-top:14px">
-                            <input type="checkbox" id="whidden" style="width:auto;accent-color:var(--brand-dark)" />
+                            <input type="checkbox" id="whidden" style="width:auto;accent-color:var(--brand-ink)" />
                             Hidden network
                         </label>
                     </div>
@@ -207,27 +215,22 @@
                 <div class="preview-section">
                     <div class="qr-frame glass" id="qrFrame">
                         <div class="qr-placeholder" id="qrPlaceholder">
-                            <svg width="60" height="60" viewBox="0 0 28 28" fill="none" opacity="0.3">
-                                <rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" />
-                                <rect x="16" y="2" width="10" height="10" rx="2" fill="currentColor" />
-                                <rect x="2" y="16" width="10" height="10" rx="2" fill="currentColor" />
-                                <rect x="16" y="16" width="10" height="10" rx="2" fill="currentColor" />
-                            </svg>
+                            <span data-icon="qr"></span>
                             <p>Fill in the form to<br />generate your QR code</p>
                         </div>
                         <canvas id="qrCanvas" style="display:none"></canvas>
                     </div>
                     <div class="qr-actions" id="qrActions" style="display:none">
                         <button class="btn-primary" id="downloadBtn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span data-icon="download"></span>
                             Download
                         </button>
                         <button class="btn-ghost" id="copyDataBtn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            <span data-icon="copy"></span>
                             Copy Data
                         </button>
                         <button class="btn-ghost" id="saveQrBtn" style="display:none">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            <span data-icon="save"></span>
                             Save QR
                         </button>
                     </div>
@@ -245,9 +248,11 @@
     <!-- MODALS -->
 
     <!-- AUTH MODAL -->
-    <div class="modal-overlay" id="authModal">
-        <div class="modal glass" id="authModalBox">
-            <button class="modal-close" data-close="authModal" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="modal-backdrop hidden" id="authModal">
+        <div class="modal glass" id="authModalBox" role="dialog" aria-modal="true" aria-label="Account">
+            <button class="icon-btn small modal-close" type="button" data-close-modal="authModal" aria-label="Close">
+                <span data-icon="close"></span>
+            </button>
             <div class="modal-tabs">
                 <button class="modal-tab active" data-auth="login">Login</button>
                 <button class="modal-tab" data-auth="register">Register</button>
@@ -259,8 +264,7 @@
                 <div class="pw-wrap">
                     <input class="field-input" id="loginPassword" type="password" name="password" placeholder="••••••••" autocomplete="current-password" />
                     <button type="button" class="pw-toggle" aria-label="Toggle password visibility">
-                        <svg class="pw-icon-show" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <svg class="pw-icon-hide" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <span data-icon="eye"></span>
                     </button>
                 </div>
                 <button type="button" class="btn-primary full-width mt-16" id="loginSubmit">Login</button>
@@ -274,16 +278,14 @@
                 <div class="pw-wrap">
                     <input class="field-input" id="regPassword" type="password" name="password" placeholder="min. 6 characters" autocomplete="new-password" />
                     <button type="button" class="pw-toggle" aria-label="Toggle password visibility">
-                        <svg class="pw-icon-show" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <svg class="pw-icon-hide" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <span data-icon="eye"></span>
                     </button>
                 </div>
                 <label class="field-label">Confirm Password</label>
                 <div class="pw-wrap">
                     <input class="field-input" id="regPassword2" type="password" name="confirm-password" placeholder="repeat password" autocomplete="new-password" />
                     <button type="button" class="pw-toggle" aria-label="Toggle password visibility">
-                        <svg class="pw-icon-show" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <svg class="pw-icon-hide" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <span data-icon="eye"></span>
                     </button>
                 </div>
                 <button type="button" class="btn-primary full-width mt-16" id="registerSubmit">Create Account</button>
@@ -293,31 +295,45 @@
     </div>
 
     <!-- MY QRs MODAL -->
-    <div class="modal-overlay" id="myQrModal">
-        <div class="modal modal-wide glass" id="myQrModalBox">
-            <button class="modal-close" data-close="myQrModal" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            <h2 class="modal-title">My QR Codes</h2>
+    <div class="modal-backdrop hidden" id="myQrModal">
+        <div class="modal modal-wide glass" id="myQrModalBox" role="dialog" aria-modal="true" aria-labelledby="myQrTitle">
+            <button class="icon-btn small modal-close" type="button" data-close-modal="myQrModal" aria-label="Close">
+                <span data-icon="close"></span>
+            </button>
+            <h2 class="modal-title" id="myQrTitle">My QR Codes</h2>
             <div id="myQrGrid" class="qr-grid">
                 <p class="empty-state">No saved QR codes yet.</p>
             </div>
         </div>
     </div>
 
-    <!-- THEME PICKER MODAL -->
-    <div class="modal-overlay" id="themeModal">
-        <div class="modal modal-sm glass" id="themeModalBox">
-            <button class="modal-close" data-close="themeModal" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            <h2 class="modal-title">Choose Theme</h2>
-            <div class="theme-grid" id="themeGrid">
-                <!-- Injected by JS -->
+    <!-- THEME MODAL -->
+    <div class="modal-backdrop hidden" id="themeModal">
+        <div class="modal glass" role="dialog" aria-modal="true" aria-labelledby="themeModalTitle">
+            <div class="modal-head">
+                <h2 id="themeModalTitle">Theme</h2>
+                <button class="icon-btn small" type="button" data-close-modal="themeModal" aria-label="Close">
+                    <span data-icon="close"></span>
+                </button>
             </div>
+            <p class="modal-section-label">Mode</p>
+            <div class="mode-toggle" id="modeToggle">
+                <button class="mode-btn" type="button" data-mode="light" aria-pressed="false"><span data-icon="sun"></span>Light</button>
+                <button class="mode-btn" type="button" data-mode="dark" aria-pressed="false"><span data-icon="moon"></span>Dark</button>
+            </div>
+            <p class="modal-section-label">Brand colour</p>
+            <div class="swatch-grid" id="swatchGrid"></div>
         </div>
     </div>
 
     <!-- TOAST -->
     <div class="toast" id="toast"></div>
 
-<script src="/qrcode.min.js"></script>
+    <script src="/js/icons.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/theme.js"></script>
+
+    <script src="/qrcode.min.js"></script>
 
     <script src="/script.js"></script>
 

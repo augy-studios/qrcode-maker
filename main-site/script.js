@@ -1,66 +1,3 @@
-/* -- THEME -- */
-const THEMES = [{
-        id: 'classic',
-        label: 'Classic',
-        hex: '#ccffcc'
-    },
-    {
-        id: 'pink',
-        label: 'Not Green 1',
-        hex: '#ffcccc'
-    },
-    {
-        id: 'lavender',
-        label: 'Not Green 2',
-        hex: '#ccccff'
-    },
-    {
-        id: 'yellow',
-        label: 'Not Green 3',
-        hex: '#ffffcc'
-    },
-    {
-        id: 'rose',
-        label: 'Not Green 4',
-        hex: '#ffccff'
-    },
-    {
-        id: 'cyan',
-        label: 'Not Green 5',
-        hex: '#ccffff'
-    },
-    {
-        id: 'white',
-        label: 'Really Really Light Green',
-        hex: '#ffffff'
-    },
-];
-
-let currentTheme = localStorage.getItem('qr_theme') || 'classic';
-
-function applyTheme(id) {
-    document.documentElement.setAttribute('data-theme', id === 'classic' ? '' : id);
-    currentTheme = id;
-    localStorage.setItem('qr_theme', id);
-    renderThemeGrid();
-}
-
-function renderThemeGrid() {
-    const grid = document.getElementById('themeGrid');
-    grid.innerHTML = THEMES.map(t => `
-    <div class="theme-option${t.id === currentTheme ? ' selected' : ''}" data-theme-id="${t.id}">
-      <span class="theme-swatch" style="background:${t.hex}"></span>
-      ${t.label}
-    </div>`).join('');
-    grid.querySelectorAll('.theme-option').forEach(el => {
-        el.addEventListener('click', () => {
-            applyTheme(el.dataset.themeId);
-            closeModal('themeModal');
-        });
-    });
-}
-applyTheme(currentTheme);
-
 /* -- TABS -- */
 let activeTab = 'url';
 
@@ -216,29 +153,6 @@ document.getElementById('copyDataBtn').addEventListener('click', async () => {
     showToast('Data copied to clipboard!');
 });
 
-/* -- MODALS -- */
-function openModal(id) {
-    document.getElementById(id).classList.add('open');
-}
-
-function closeModal(id) {
-    document.getElementById(id).classList.remove('open');
-}
-
-document.querySelectorAll('[data-close]').forEach(btn => {
-    btn.addEventListener('click', () => closeModal(btn.dataset.close));
-});
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => {
-        if (e.target === overlay) closeModal(overlay.id);
-    });
-});
-
-document.getElementById('themeBtn').addEventListener('click', () => {
-    renderThemeGrid();
-    openModal('themeModal');
-});
-
 /* -- AUTH TABS -- */
 document.querySelectorAll('.modal-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -258,7 +172,8 @@ function setAuthBtn() {
     const btn = document.getElementById('authBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     if (currentUser) {
-        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> My QRs';
+        btn.innerHTML = '<span data-icon="folder"></span> My QRs';
+        hydrateIcons(btn);
         logoutBtn.style.display = '';
         document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
     } else {
@@ -463,10 +378,11 @@ async function loadMyQRs() {
         <img src="${q.image_url}" alt="QR Code" loading="lazy" />
         <div class="qr-card-label">${escHtml(q.data_preview)}</div>
         <div class="qr-card-actions">
-          <a href="${q.image_url}" download="qr-${q.id}.png" class="btn-ghost" style="text-align:center;font-size:.72rem;padding:5px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
-          <button class="btn-ghost" onclick="deleteQR('${q.id}')" style="padding:5px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+          <a href="${q.image_url}" download="qr-${q.id}.png" class="btn-ghost" aria-label="Download"><span data-icon="download"></span></a>
+          <button class="btn-ghost" onclick="deleteQR('${q.id}')" aria-label="Delete"><span data-icon="trash"></span></button>
         </div>
       </div>`).join('');
+        hydrateIcons(grid);
     } catch {
         grid.innerHTML = '<p class="empty-state">Failed to load.</p>';
     }
@@ -508,8 +424,8 @@ document.querySelectorAll('.pw-toggle').forEach(btn => {
         const input = btn.previousElementSibling;
         const showing = input.type === 'text';
         input.type = showing ? 'password' : 'text';
-        btn.querySelector('.pw-icon-show').style.display = showing ? '' : 'none';
-        btn.querySelector('.pw-icon-hide').style.display = showing ? 'none' : '';
+        btn.querySelector('[data-icon]').setAttribute('data-icon', showing ? 'eye' : 'eye-off');
+        hydrateIcons(btn);
     });
 });
 
