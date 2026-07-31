@@ -1,14 +1,9 @@
 import supabase from '../lib/supabase.js';
 import { ok, err } from '../lib/response.js';
 import { requireAuth } from '../lib/session.js';
-import { verifySignedRequest } from '../lib/uwu-request-signing-server.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return err(res, 'Method not allowed', 405);
-
-    const { valid, reason } = await verifySignedRequest(req, supabase);
-    if (!valid) return err(res, reason, 401);
-
     const { id, token } = req.body;
 
     let userId;

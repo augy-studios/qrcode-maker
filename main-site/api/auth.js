@@ -1,38 +1,11 @@
 import supabase from '../lib/supabase.js';
 import { ok, err } from '../lib/response.js';
-import { verifySignedRequest } from '../lib/uwu-request-signing-server.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-
-const APP_ID = 'qr-maker';
-
-// expiry must always mirror the qr_sessions row's expiry 1:1.
-async function issueSigningKey(sessionToken, expires) {
-    const signingKey = crypto.randomBytes(32).toString('hex');
-    const { data, error } = await supabase
-        .from('uwu_signing_keys')
-        .insert({
-            session_token: sessionToken,
-            signing_key: signingKey,
-            is_guest: false,
-            app_id: APP_ID,
-            expires_at: expires.toISOString(),
-        })
-        .select('id')
-        .single();
-    if (error) throw new Error('Failed to issue signing key');
-    return { keyId: data.id, signingKey };
-}
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return err(res, 'Method not allowed', 405);
     const { action, username, email, password, token } = req.body;
-
-    // register/login issue the signing key, so they can't require one yet.
-    if (action === 'logout' || action === 'me') {
-        const { valid, reason } = await verifySignedRequest(req, supabase);
-        if (!valid) return err(res, reason, 401);
-    }
 
     try {
         if (action === 'register') {
@@ -65,14 +38,11 @@ export default async function handler(req, res) {
                 user_id: user.id,
                 expires_at: expires.toISOString(),
             });
-            const { keyId, signingKey } = await issueSigningKey(sessionToken, expires);
 
             return ok(res, {
                 message: 'Account created! You can now log in.',
                 username: user.username,
                 session: { token: sessionToken, userId: user.id },
-                key_id: keyId,
-                signing_key: signingKey,
             });
         }
 
@@ -97,13 +67,10 @@ export default async function handler(req, res) {
                 user_id: user.id,
                 expires_at: expires.toISOString(),
             });
-            const { keyId, signingKey } = await issueSigningKey(sessionToken, expires);
 
             return ok(res, {
                 user: { id: user.id, username: user.username },
                 token: sessionToken,
-                key_id: keyId,
-                signing_key: signingKey,
             });
         }
 
