@@ -1,0 +1,11 @@
+# Telethon 2.x is a different API surface, so stay on the 1.x line.
+Telethon>=1.36,<2.0
+python-dotenv>=1.0,<2.0
+httpx>=0.27,<1.0
+qrcode>=7.4,<9.0
+Pillow>=10.3
+pyzbar>=0.1.9
+
+# Optional. Speeds up Telegram's encryption noticeably on a small VPS.
+# Uncomment after installing build-essential if you want it.
+# cryptg>=0.4

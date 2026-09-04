@@ -1,5 +1,6 @@
 import supabase from '../lib/supabase.js';
 import { ok, err } from '../lib/response.js';
+import { linkForUser, requestMeta, startTwofaChallenge } from '../lib/telegram.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -59,6 +60,26 @@ export default async function handler(req, res) {
 
             const valid = await bcrypt.compare(password, user.password_hash);
             if (!valid) return err(res, 'Invalid username or password', 401);
+
+            // Sign in approval. The password was right, but the session is held
+            // back until the linked Telegram account allows it. The bot polls
+            // qr_tokens, pushes the prompt, and the browser waits on 'challenge'.
+            const link = await linkForUser(user.id);
+            if (link?.twofa_enabled && link.telegram_id) {
+                const challenge = await startTwofaChallenge(
+                    user.id,
+                    link.telegram_id,
+                    requestMeta(req)
+                );
+                return ok(res, {
+                    twofa_required: true,
+                    challenge: challenge.id,
+                    expires_at: challenge.expires_at,
+                    hint: link.telegram_username
+                        ? `Check Telegram, @${link.telegram_username}`
+                        : 'Check Telegram for the code',
+                });
+            }
 
             const sessionToken = crypto.randomBytes(32).toString('hex');
             const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

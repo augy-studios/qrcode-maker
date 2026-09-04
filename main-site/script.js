@@ -161,6 +161,7 @@ document.querySelectorAll('.modal-tab').forEach(btn => {
         const mode = btn.dataset.auth;
         document.getElementById('authLoginForm').style.display = mode === 'login' ? 'block' : 'none';
         document.getElementById('authRegisterForm').style.display = mode === 'register' ? 'block' : 'none';
+        document.getElementById('authTwofaForm').style.display = 'none';
         document.getElementById('authMsg').textContent = '';
     });
 });
@@ -208,6 +209,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 document.getElementById('authBtn').addEventListener('click', () => {
     if (currentUser) {
         loadMyQRs();
+        tgRefresh();
         openModal('myQrModal');
     } else {
         openModal('authModal');
@@ -247,12 +249,16 @@ document.getElementById('loginSubmit').addEventListener('click', async () => {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
-        currentUser = data.user;
-        localStorage.setItem('qr_session', data.token);
-        triggerPasswordSave(username, password);
-        closeModal('authModal');
-        setAuthBtn();
-        showToast('Welcome back!');
+
+        // The password was right but the account wants Telegram to allow it,
+        // so no session comes back until that happens.
+        if (data.twofa_required) {
+            msg.textContent = '';
+            beginTwofa(data, username, password);
+            return;
+        }
+
+        finishSignIn(data.user, data.token, username, password);
     } catch (e) {
         msg.className = 'auth-msg error';
         msg.textContent = e.message;
@@ -433,3 +439,243 @@ document.querySelectorAll('.pw-toggle').forEach(btn => {
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+/* -- SIGN IN COMPLETION -- */
+function finishSignIn(user, token, username, password) {
+    currentUser = user;
+    localStorage.setItem('qr_session', token);
+    if (username && password) triggerPasswordSave(username, password);
+    closeModal('authModal');
+    setAuthBtn();
+    showToast('Welcome back!');
+}
+
+/* -- TWO FACTOR, VIA TELEGRAM -- */
+/*
+ * Two ways to finish, running at the same time. Either the six digits get
+ * typed in here, or the Approve button gets tapped in the chat and the poll
+ * below notices. Whichever lands first wins.
+ */
+let twofaPoll = null;
+
+function stopTwofaPoll() {
+    if (twofaPoll) {
+        clearInterval(twofaPoll);
+        twofaPoll = null;
+    }
+}
+
+function showAuthPane(pane) {
+    document.getElementById('authLoginForm').style.display = pane === 'login' ? 'block' : 'none';
+    document.getElementById('authRegisterForm').style.display = pane === 'register' ? 'block' : 'none';
+    document.getElementById('authTwofaForm').style.display = pane === 'twofa' ? 'block' : 'none';
+    const tabs = document.querySelector('.modal-tabs');
+    if (tabs) tabs.style.display = pane === 'twofa' ? 'none' : '';
+}
+
+function beginTwofa(challenge, username, password) {
+    stopTwofaPoll();
+    showAuthPane('twofa');
+    document.getElementById('twofaHint').textContent =
+        challenge.hint || 'Check Telegram for the code.';
+    const field = document.getElementById('twofaCode');
+    field.value = '';
+    field.focus();
+
+    const submit = async () => {
+        const code = field.value.replace(/\D/g, '');
+        const msg = document.getElementById('authMsg');
+        if (code.length !== 6) {
+            msg.className = 'auth-msg error';
+            msg.textContent = 'Enter all six digits.';
+            return;
+        }
+        msg.className = 'auth-msg';
+        msg.textContent = 'Checking...';
+        try {
+            const res = await fetch('/api/telegram-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'verify', challenge: challenge.challenge, code }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'That did not work');
+            stopTwofaPoll();
+            showAuthPane('login');
+            msg.textContent = '';
+            finishSignIn(data.user, data.token, username, password);
+        } catch (e) {
+            msg.className = 'auth-msg error';
+            msg.textContent = e.message;
+            field.value = '';
+            field.focus();
+        }
+    };
+
+    document.getElementById('twofaSubmit').onclick = submit;
+    field.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+        }
+    };
+    document.getElementById('twofaCancel').onclick = () => {
+        stopTwofaPoll();
+        showAuthPane('login');
+        document.getElementById('authMsg').textContent = '';
+    };
+
+    // Watch for the Approve button being tapped in the chat instead.
+    const started = Date.now();
+    twofaPoll = setInterval(async () => {
+        if (Date.now() - started > 6 * 60 * 1000) return stopTwofaPoll();
+        try {
+            const res = await fetch('/api/telegram-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'challenge', challenge: challenge.challenge }),
+            });
+            const data = await res.json();
+            if (data.status === 'confirmed' && data.token) {
+                stopTwofaPoll();
+                showAuthPane('login');
+                finishSignIn(data.user, data.token, username, password);
+                return;
+            }
+            const dead = {
+                denied: 'That sign in was refused from Telegram.',
+                burned: 'Too many wrong codes. Start the sign in again.',
+                expired: 'That request expired. Start the sign in again.',
+                gone: 'That request is no longer there. Start again.',
+            };
+            if (dead[data.status]) {
+                stopTwofaPoll();
+                showAuthPane('login');
+                const msg = document.getElementById('authMsg');
+                msg.className = 'auth-msg error';
+                msg.textContent = dead[data.status];
+            }
+        } catch {
+            // A dropped poll is not worth reporting. The next one covers it.
+        }
+    }, 2500);
+}
+
+/* -- TELEGRAM LINK PANEL -- */
+const tgApi = (body) =>
+    fetch('/api/telegram-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: localStorage.getItem('qr_session'), ...body }),
+    }).then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Request failed');
+        return d;
+    });
+
+let tgConnectPoll = null;
+
+function stopTgConnectPoll() {
+    if (tgConnectPoll) {
+        clearInterval(tgConnectPoll);
+        tgConnectPoll = null;
+    }
+}
+
+function tgSay(text, isError) {
+    const msg = document.getElementById('tgMsg');
+    if (!msg) return;
+    msg.className = isError ? 'auth-msg error' : 'auth-msg';
+    msg.textContent = text;
+}
+
+async function tgRefresh() {
+    const panel = document.getElementById('tgPanel');
+    if (!panel || !currentUser) return;
+    panel.hidden = false;
+    const state = document.getElementById('tgState');
+    try {
+        const { linked, telegram } = await tgApi({ action: 'status' });
+        document.getElementById('tgConnected').hidden = !linked;
+        document.getElementById('tgDisconnected').hidden = linked;
+        state.textContent = linked
+            ? 'Connected' + (telegram.username ? ' to @' + telegram.username : '') + '.'
+            : 'Not connected yet.';
+        document.getElementById('tgTwofa').checked = !!(telegram && telegram.twofa);
+    } catch (e) {
+        state.textContent = e.message;
+    }
+}
+
+document.getElementById('tgConnectBtn')?.addEventListener('click', async () => {
+    stopTgConnectPoll();
+    tgSay('Opening Telegram...');
+    try {
+        const { code, url } = await tgApi({ action: 'deeplink' });
+        window.open(url, '_blank', 'noopener');
+        tgSay('Confirm it in the chat. This updates by itself.');
+
+        const started = Date.now();
+        tgConnectPoll = setInterval(async () => {
+            if (Date.now() - started > 10 * 60 * 1000) return stopTgConnectPoll();
+            try {
+                const { status } = await tgApi({ action: 'poll', code });
+                if (status === 'confirmed') {
+                    stopTgConnectPoll();
+                    tgSay('');
+                    showToast('Telegram connected!');
+                    tgRefresh();
+                } else if (['denied', 'expired', 'gone'].includes(status)) {
+                    stopTgConnectPoll();
+                    tgSay('That request was not completed. Try again.', true);
+                }
+            } catch {
+                // Keep polling. A single failed check means nothing.
+            }
+        }, 2000);
+    } catch (e) {
+        tgSay(e.message, true);
+    }
+});
+
+document.getElementById('tgCodeBtn')?.addEventListener('click', async () => {
+    const field = document.getElementById('tgCodeInput');
+    try {
+        await tgApi({ action: 'redeem', code: field.value });
+        field.value = '';
+        tgSay('');
+        showToast('Telegram connected!');
+        tgRefresh();
+    } catch (e) {
+        tgSay(e.message, true);
+    }
+});
+
+document.getElementById('tgCodeInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('tgCodeBtn').click();
+    }
+});
+
+document.getElementById('tgUnlinkBtn')?.addEventListener('click', async () => {
+    try {
+        await tgApi({ action: 'unlink' });
+        showToast('Telegram disconnected.');
+        tgSay('');
+        tgRefresh();
+    } catch (e) {
+        tgSay(e.message, true);
+    }
+});
+
+document.getElementById('tgTwofa')?.addEventListener('change', async (e) => {
+    try {
+        await tgApi({ action: 'twofa', enabled: e.target.checked });
+        showToast(e.target.checked ? 'Sign in approval is on.' : 'Sign in approval is off.');
+        tgSay('');
+    } catch (err) {
+        e.target.checked = !e.target.checked;
+        tgSay(err.message, true);
+    }
+});

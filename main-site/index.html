@@ -290,6 +290,17 @@
                 </div>
                 <button type="button" class="btn-primary full-width mt-16" id="registerSubmit">Create Account</button>
             </form>
+            <form id="authTwofaForm" style="display:none" action="#" onsubmit="return false">
+                <p class="tg-hint" id="twofaHint">Check Telegram for the code.</p>
+                <label class="field-label">Six digit code</label>
+                <input class="field-input tg-otp" id="twofaCode" type="text" inputmode="numeric"
+                    maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+                <button type="button" class="btn-primary full-width mt-16" id="twofaSubmit">Confirm</button>
+                <p class="tg-hint tg-waiting" id="twofaWaiting">
+                    Or tap Approve in the chat and this signs you in by itself.
+                </p>
+                <button type="button" class="btn-ghost full-width" id="twofaCancel">Cancel</button>
+            </form>
             <p class="auth-msg" id="authMsg"></p>
         </div>
     </div>
@@ -303,6 +314,41 @@
             <h2 class="modal-title" id="myQrTitle">My QR Codes</h2>
             <div id="myQrGrid" class="qr-grid">
                 <p class="empty-state">No saved QR codes yet.</p>
+            </div>
+
+            <!-- TELEGRAM -->
+            <div class="tg-panel" id="tgPanel" hidden>
+                <p class="modal-section-label">Telegram</p>
+                <p class="tg-state" id="tgState">Checking...</p>
+
+                <div id="tgDisconnected">
+                    <p class="tg-hint">
+                        Connect Telegram to browse these codes from a chat, save new
+                        ones straight here, and approve sign ins from your phone.
+                    </p>
+                    <button class="btn-primary full-width" type="button" id="tgConnectBtn">
+                        Connect Telegram
+                    </button>
+                    <p class="tg-hint">Already have a six digit code from the chat?</p>
+                    <div class="tg-code-row">
+                        <input class="field-input" id="tgCodeInput" type="text"
+                            inputmode="numeric" maxlength="6" placeholder="000000"
+                            autocomplete="one-time-code" aria-label="Six digit code" />
+                        <button class="btn-ghost" type="button" id="tgCodeBtn">Link</button>
+                    </div>
+                </div>
+
+                <div id="tgConnected" hidden>
+                    <label class="tg-toggle">
+                        <input type="checkbox" id="tgTwofa" />
+                        <span>Ask Telegram to approve every sign in</span>
+                    </label>
+                    <button class="btn-ghost full-width" type="button" id="tgUnlinkBtn">
+                        Disconnect
+                    </button>
+                </div>
+
+                <p class="auth-msg" id="tgMsg"></p>
             </div>
         </div>
     </div>

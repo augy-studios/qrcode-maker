@@ -903,3 +903,78 @@ textarea.field-input {
   background: var(--brand-fill-strong);
   border-radius: 99px;
 }
+
+/* ── TELEGRAM LINK ── */
+.tg-panel {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--surface-border);
+}
+
+.tg-state {
+  font-size: 0.95rem;
+  color: var(--ink);
+  margin: 2px 0 12px;
+}
+
+.tg-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 12px 0 8px;
+}
+
+.tg-code-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.tg-code-row .field-input {
+  flex: 1;
+  min-width: 0;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+
+.tg-code-row .btn-ghost {
+  flex: 0 0 auto;
+}
+
+.tg-otp {
+  letter-spacing: 0.32em;
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+.tg-waiting {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.tg-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 14px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tg-toggle input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--brand-ink);
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .tg-code-row {
+    flex-direction: column;
+  }
+
+  .tg-code-row .btn-ghost {
+    justify-content: center;
+  }
+}
