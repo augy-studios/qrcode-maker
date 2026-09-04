@@ -62,17 +62,6 @@ def register(client) -> None:
         raise events.StopPropagation
 
     @client.on(events.NewMessage(
-        pattern=dispatch.command("help", "commands"), func=dispatch.private
-    ))
-    async def on_help(event):
-        await ui.reply_rich(
-            event,
-            ui.start_text(),
-            buttons=ui.keyboard(ui.row(ui.portal_button(), ui.donate_button())),
-        )
-        raise events.StopPropagation
-
-    @client.on(events.NewMessage(
         pattern=dispatch.command("donate", "support"), func=dispatch.private
     ))
     async def on_donate(event):

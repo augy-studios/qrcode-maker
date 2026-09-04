@@ -8,12 +8,18 @@ quiet zone, and the small uwu mark boxed out at the centre.
 The watermark punches a hole in the symbol. Level H tolerates roughly thirty
 percent damage, which is why the portal pins it there and why the settings
 command warns when you drop below it.
+
+The mark is drawn in Jua, the same face the portal loads from Google Fonts. A
+browser can fetch a webfont; a server cannot, so the file is committed under
+assets/ and read from disk. Everything after it in FONT_CANDIDATES is a safety
+net for a broken install, and will not look like the site.
 """
 
 import io
 import logging
 import re
 from datetime import datetime
+from pathlib import Path
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -26,6 +32,7 @@ from qrcode.constants import (
 
 from config import (
     FONT_CANDIDATES,
+    WATERMARK_FONT,
     WATERMARK_FONT_RATIO,
     WATERMARK_PAD_RATIO,
     WATERMARK_TEXT,
@@ -41,26 +48,51 @@ EC_LEVELS = {
 }
 
 _font_cache: dict[int, ImageFont.FreeTypeFont] = {}
+_font_path: Path | None = None
 
 
 # ------------------------------------------------------------------- fonts --
 
 
-def _font(size: int):
-    if size in _font_cache:
-        return _font_cache[size]
+def _resolve_font_path() -> Path | None:
+    """The first usable font on the list, remembered for reporting."""
+    global _font_path
+    if _font_path is not None:
+        return _font_path
     for candidate in FONT_CANDIDATES:
         try:
             if candidate.exists():
-                font = ImageFont.truetype(str(candidate), size)
-                _font_cache[size] = font
-                return font
+                ImageFont.truetype(str(candidate), 24)
+                _font_path = candidate
+                return _font_path
         except OSError:
             continue
-    log.warning("No TrueType font found, falling back to the bitmap default.")
-    font = ImageFont.load_default()
+    return None
+
+
+def _font(size: int):
+    if size in _font_cache:
+        return _font_cache[size]
+
+    path = _resolve_font_path()
+    if path is not None:
+        font = ImageFont.truetype(str(path), size)
+    else:
+        log.warning("No TrueType font found, falling back to the bitmap default.")
+        font = ImageFont.load_default()
+
     _font_cache[size] = font
     return font
+
+
+def watermark_font_name() -> str:
+    """What the watermark is actually being drawn in, for logs and health."""
+    path = _resolve_font_path()
+    if path is None:
+        return "none, using the bitmap default"
+    if path == WATERMARK_FONT:
+        return "Jua, matching the portal"
+    return f"{path.name}, not Jua, so it will not match the portal"
 
 
 # -------------------------------------------------------- payload builders --
@@ -276,7 +308,14 @@ def _draw_watermark(image: Image.Image, size: int, fg: str, bg: str) -> None:
     font = _font(font_size)
     pad = max(2, round(size * WATERMARK_PAD_RATIO))
 
-    left, top, right, bottom = draw.textbbox((0, 0), WATERMARK_TEXT, font=font)
+    # The portal asks the browser for "bold Jua", and Jua only ships a Regular
+    # weight, so what it actually gets is a synthesised bold. A thin stroke is
+    # how the same thickening is done here.
+    stroke = max(1, round(font_size * 0.04)) if _resolve_font_path() else 0
+
+    left, top, right, bottom = draw.textbbox(
+        (0, 0), WATERMARK_TEXT, font=font, stroke_width=stroke
+    )
     text_w, text_h = right - left, bottom - top
     box_w, box_h = text_w + pad * 2, font_size + pad * 2
     centre_x, centre_y = size / 2, size / 2
@@ -295,6 +334,8 @@ def _draw_watermark(image: Image.Image, size: int, fg: str, bg: str) -> None:
         WATERMARK_TEXT,
         font=font,
         fill=fg,
+        stroke_width=stroke,
+        stroke_fill=fg,
     )
 
 

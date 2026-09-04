@@ -14,9 +14,13 @@ data/
 *.db-shm
 *.log
 
-# Fonts you drop in yourself
-assets/*.ttf
-assets/*.otf
+# Jua is committed on purpose. It is the font the portal draws the watermark
+# in, it is licensed under the SIL Open Font License, and the bot needs the
+# actual file because it renders on the server rather than in a browser.
+# Anything else dropped into assets is yours and stays out of the repository.
+assets/*
+!assets/Jua-Regular.ttf
+!assets/OFL.txt
 
 # Python
 __pycache__/

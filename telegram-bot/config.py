@@ -91,10 +91,13 @@ DB_PATH = DATA_DIR / "bot.db"
 SESSION_PATH = DATA_DIR / "bot"          # Telethon appends .session
 LOG_PATH = DATA_DIR / "bot.log"
 
-# Jua is the font the portal draws the watermark in. Drop Jua-Regular.ttf into
-# assets/ to match the site exactly, otherwise a bundled sans serif is used.
+# Jua is the font the portal draws the watermark in, so the bot ships it and
+# the two look identical. The rest are only a safety net for an install where
+# the file has gone missing, and they will not match the site.
+WATERMARK_FONT = ASSETS_DIR / "Jua-Regular.ttf"
+
 FONT_CANDIDATES = (
-    ASSETS_DIR / "Jua-Regular.ttf",
+    WATERMARK_FONT,
     Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
     Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
     Path("C:/Windows/Fonts/arialbd.ttf"),

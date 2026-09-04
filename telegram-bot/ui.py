@@ -180,12 +180,13 @@ START = (
     "<b>Everything else</b>\n"
     "{settings} changes size, colour and error correction\n"
     "{cancel} abandons whatever is half finished\n"
-    "{help} shows this again"
+    "\n"
+    "Run {start} at any time to see this list again."
 )
 
 COMMAND_LIST = (
-    "qr", "wifi", "contact", "event", "decode", "link", "unlink", "code",
-    "saved", "twofa", "settings", "cancel", "help",
+    "start", "qr", "wifi", "contact", "event", "decode", "link", "unlink",
+    "code", "saved", "twofa", "settings", "cancel",
 )
 
 
@@ -197,7 +198,7 @@ def start_text() -> str:
 # SETUP.md can quote it, with no chance of the two drifting apart. Telegram caps
 # a description at 256 characters and requires lower case command names.
 COMMAND_DESCRIPTIONS = (
-    ("start", "What this is, and everything it can do"),
+    ("start", "What this is, and the full command list"),
     ("qr", "Turn a link or some text into a code"),
     ("wifi", "Build a WiFi code step by step"),
     ("contact", "Build a contact card step by step"),
@@ -210,7 +211,6 @@ COMMAND_DESCRIPTIONS = (
     ("twofa", "Turn sign in approval on or off"),
     ("settings", "Size, colour and error correction"),
     ("cancel", "Abandon whatever is half finished"),
-    ("help", "Show the command list again"),
 )
 
 

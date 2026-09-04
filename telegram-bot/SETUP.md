@@ -84,7 +84,7 @@ Send `/setcommands`, pick the bot, then paste this whole block in one message.
 Order matters, since it is the order the menu shows.
 
 ```text
-start - What this is, and everything it can do
+start - What this is, and the full command list
 qr - Turn a link or some text into a code
 wifi - Build a WiFi code step by step
 contact - Build a contact card step by step
@@ -97,8 +97,10 @@ saved - Browse the codes on your account
 twofa - Turn sign in approval on or off
 settings - Size, colour and error correction
 cancel - Abandon whatever is half finished
-help - Show the command list again
 ```
+
+There is no help entry. Running `/start` again prints the same list, so a
+second command for it was just one more thing to keep in step.
 
 The bot can also push that list itself, which avoids the two drifting apart:
 
@@ -256,7 +258,9 @@ cd qrcode-maker/telegram-bot
 ```
 
 Read what it prints. Everything should say ready or configured, apart from
-reading codes if you skipped `libzbar0t64`. Then:
+reading codes if you skipped `libzbar0t64`. The watermark line should say
+**Jua, matching the portal**; anything else means `assets/Jua-Regular.ttf` did
+not survive the clone. Then:
 
 ```bash
 ./run.sh start --sync-commands

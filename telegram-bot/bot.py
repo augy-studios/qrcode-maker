@@ -24,6 +24,7 @@ import handlers_account
 import handlers_core
 import handlers_qr
 import linking
+import qrgen
 import runtime
 import supa
 import ui
@@ -153,6 +154,7 @@ async def run(args) -> None:
         "Reading codes %s.",
         "enabled" if handlers_qr.DECODING_AVAILABLE else "off, zbar not installed",
     )
+    log.info("Watermark font: %s.", qrgen.watermark_font_name())
     log.info(
         "Health command %s.",
         f"available to {len(config.OWNER_TELEGRAM_IDS)} owner id(s)"
@@ -203,6 +205,7 @@ def check() -> int:
         from PIL import Image  # noqa: F401
 
         print("Generating     ready")
+        print(f"Watermark      {qrgen.watermark_font_name()}")
     except ImportError as exc:
         print(f"Generating     BROKEN, {exc}")
         return 1

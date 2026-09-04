@@ -53,7 +53,7 @@ nothing. Scroll back to a message from weeks ago and its buttons still respond.
 
 | Command | What it does |
 | ------- | ------------ |
-| `/start` | What the bot is, the full command list, and links to the portal and the donation page |
+| `/start` | What the bot is, the full command list, and links to the portal and the donation page. Run it again at any time to get the list back |
 | `/qr <text or link>` | Turns whatever follows into a code |
 | `/wifi` | Builds a WiFi code over four short questions |
 | `/contact` | Builds a contact card, vCard 3.0 |
@@ -66,7 +66,6 @@ nothing. Scroll back to a message from weeks ago and its buttons still respond.
 | `/twofa` | Turns sign in approval on or off |
 | `/settings` | Size, quiet zone, error correction, watermark, colours |
 | `/cancel` | Abandons a half finished builder |
-| `/help` | Shows the command list again |
 
 You can skip `/qr` entirely and send the text on its own. Sending a photo is
 likewise the same as `/decode`.
@@ -177,9 +176,11 @@ Confirm the environment adds up before going near Telegram:
 That prints what it found, applies the SQLite schema, and exits. It does not
 connect to anything.
 
-Optionally drop `Jua-Regular.ttf` into `assets/` to draw the watermark in the
-same font the portal uses. Without it a bundled sans serif stands in, which
-looks close enough that most people will not notice.
+The Jua font is committed under `assets/`, so the watermark comes out in the
+same face the portal uses with nothing to install. A browser can pull a webfont
+from Google; a server cannot, which is why the file lives in the repository.
+It is licensed under the SIL Open Font License, and `assets/OFL.txt` is the
+copy that goes with it. `./run.sh check` says which font is actually in use.
 
 ## Running it under tmux
 
@@ -254,8 +255,9 @@ verbatim.
 configured, and the log says so on start up. Confirm `/twofa` is on for that
 account and that the portal is running the patched `api/auth.js`.
 
-**The watermark looks wrong.** No TrueType font was found. Drop one into
-`assets/` or install `fonts-dejavu-core`.
+**The watermark looks wrong.** `assets/Jua-Regular.ttf` is missing, so the
+renderer fell back to whatever system font it could find. `./run.sh check`
+reports which one. Restore the file from the repository.
 
 ## The files
 
@@ -274,7 +276,8 @@ handlers_qr.py        generating, the guided builders, decoding, inline mode
 handlers_account.py   saved codes and settings
 run.sh                tmux wrapper
 requirements.txt      pinned to the Telethon 1.x line
-.env.example          the five variables, documented
+.env.example          every variable, documented
+assets/               Jua-Regular.ttf and its licence
 ```
 
 On the portal side, this bot also relies on `main-site/api/telegram-link.js`,
