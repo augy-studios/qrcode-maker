@@ -1,6 +1,7 @@
 import supabase from '../lib/supabase.js';
 import { ok, err } from '../lib/response.js';
 import { linkForUser, requestMeta, startTwofaChallenge } from '../lib/telegram.js';
+import { remainingCount } from '../lib/backup-codes.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -71,6 +72,10 @@ export default async function handler(req, res) {
                     link.telegram_id,
                     requestMeta(req)
                 );
+                // Whether the way in without Telegram is worth offering. Only
+                // the count travels, never anything about the codes themselves.
+                const backupLeft = await remainingCount(user.id);
+
                 return ok(res, {
                     twofa_required: true,
                     challenge: challenge.id,
@@ -78,6 +83,7 @@ export default async function handler(req, res) {
                     hint: link.telegram_username
                         ? `Check Telegram, @${link.telegram_username}`
                         : 'Check Telegram for the code',
+                    backup_available: backupLeft > 0,
                 });
             }
 

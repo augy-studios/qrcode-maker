@@ -55,6 +55,9 @@ Everything the site does, in a chat, plus the things a chat is better at.
 - **Sign in approval.** With it turned on, a correct password is not enough to
   get into the portal. The attempt is held until you allow it in Telegram,
   either by typing six digits or by tapping through an approval page.
+- **Backup codes**, ten of them, made on the portal and kept somewhere that is
+  not your phone. Each one finishes a held back sign in on its own, for the day
+  Telegram is not reachable at all.
 
 It is a private chat bot and ignores groups. Codes it makes are identical, byte
 for byte, to codes the site makes from the same input.
@@ -78,6 +81,14 @@ are standing on when you start.
 Every token is single use and short lived, wrong codes are counted, and a
 password is never typed into a chat on any of the four routes.
 
+**When the chat is gone.** Sign in approval leans on one account being
+reachable, so an account with it turned on can hold ten backup codes, made
+under My QRs and shown once. A backup code is typed into the same field the
+six digits would go in and finishes the sign in without Telegram being involved
+at all. Wrong ones burn the same attempt counter, only the hashes are stored,
+and the bot reports in the chat whenever one is spent. Once back in, Disconnect
+turns approval off and a fresh Telegram account can be linked.
+
 ## Running it yourself
 
 Both halves are independent, so start with whichever you need.
@@ -85,7 +96,9 @@ Both halves are independent, so start with whichever you need.
 **The web app** deploys to Vercel from `main-site/`. It needs a Supabase
 project with `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` set, the `qr_users`,
 `qr_sessions` and `qr_codes` tables, and a public `qr_images` storage bucket.
-Add `TELEGRAM_BOT_USERNAME` as well if the bot is in play.
+Add `TELEGRAM_BOT_USERNAME` as well if the bot is in play, and
+`BACKUP_CODE_SECRET` if you would rather backup codes were not hashed with the
+same key that reaches the database.
 
 **The bot** runs on any machine that stays on. It is developed against Debian
 13 and driven with tmux. Full walkthrough in

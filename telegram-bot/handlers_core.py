@@ -401,8 +401,9 @@ async def _show_twofa(client, chat_id: int, sender_id: int, link: dict,
             "Every sign in also has to be approved here, either by tapping the "
             "button in the message or by typing the six digits it carries.\n"
             "\n"
-            "Keep this chat reachable. If you lose access to Telegram you will "
-            "need to disconnect from the portal to get back in."
+            "Keep this chat reachable. If you cannot, the backup codes on the "
+            "portal are the way back in, so make a set under My QRs before you "
+            "need them."
         )
         label = "Turn it off"
     else:

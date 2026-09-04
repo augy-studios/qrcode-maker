@@ -22,6 +22,12 @@ direction the token travels and who issues it.
 
 The bot owns the Telegram half of all four. The portal half lives in
 main-site/api/telegram-link.js.
+
+There is a fifth way to finish a held back sign in, and the bot has no half of
+it at all: a backup code, typed into the portal when this chat cannot be
+reached. The bot only ever hears about it afterwards, from the token, and says
+so in the chat, because a sign in that went around Telegram is exactly the sort
+of thing the owner should be told about.
 """
 
 import asyncio
@@ -417,6 +423,30 @@ async def _announce_one(client, token: dict) -> None:
             "Turn on sign in approval with /twofa if you want this chat to guard "
             "the portal login as well.",
             buttons=ui.keyboard(ui.row(ui.portal_button())),
+        )
+        return
+
+    # A backup code finished this one, which means the chat was never part of
+    # it. Usually that is the owner, locked out and using the way back in. When
+    # it is not, this message is the only place they would ever find out.
+    if meta.get("via") == "backup":
+        left = meta.get("backup_left")
+        remaining = (
+            f"{left} backup {'code' if left == 1 else 'codes'} left."
+            if isinstance(left, int)
+            else "Check how many you have left on the portal."
+        )
+        await _replace_prompt(
+            client, token, meta,
+            "<b>Signed in with a backup code</b>\n"
+            "\n"
+            f"The sign in to {ui.esc(username)} was finished with one of your "
+            "backup codes rather than from here. That code is now spent. "
+            f"{ui.esc(remaining)}\n"
+            "\n"
+            "If that was not you, change your password and make a fresh set of "
+            "codes, which throws away every one that still works.",
+            buttons=ui.keyboard(ui.row(ui.portal_button("Open My QRs"))),
         )
         return
 

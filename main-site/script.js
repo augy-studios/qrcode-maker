@@ -441,13 +441,13 @@ if ('serviceWorker' in navigator) {
 }
 
 /* -- SIGN IN COMPLETION -- */
-function finishSignIn(user, token, username, password) {
+function finishSignIn(user, token, username, password, note) {
     currentUser = user;
     localStorage.setItem('qr_session', token);
     if (username && password) triggerPasswordSave(username, password);
     closeModal('authModal');
     setAuthBtn();
-    showToast('Welcome back!');
+    showToast(note || 'Welcome back!');
 }
 
 /* -- TWO FACTOR, VIA TELEGRAM -- */
@@ -455,6 +455,11 @@ function finishSignIn(user, token, username, password) {
  * Two ways to finish, running at the same time. Either the six digits get
  * typed in here, or the Approve button gets tapped in the chat and the poll
  * below notices. Whichever lands first wins.
+ *
+ * A third way exists for when neither can happen, because the phone is lost or
+ * the app will not open: one of the backup codes made on the account. The same
+ * field takes it, the toggle underneath swaps between the two, and the account
+ * is only offered it when it actually has codes left.
  */
 let twofaPoll = null;
 
@@ -476,34 +481,79 @@ function showAuthPane(pane) {
 function beginTwofa(challenge, username, password) {
     stopTwofaPoll();
     showAuthPane('twofa');
-    document.getElementById('twofaHint').textContent =
-        challenge.hint || 'Check Telegram for the code.';
+
     const field = document.getElementById('twofaCode');
-    field.value = '';
-    field.focus();
+    const hint = document.getElementById('twofaHint');
+    const label = document.getElementById('twofaLabel');
+    const waiting = document.getElementById('twofaWaiting');
+    const toggle = document.getElementById('twofaBackupToggle');
+    const telegramHint = challenge.hint || 'Check Telegram for the code.';
+
+    let backupMode = false;
+    // Never offered to an account with nothing to offer. Someone who has run
+    // out is better told to reach Telegram than sent looking for a code that
+    // will not work.
+    toggle.hidden = !challenge.backup_available;
+
+    const dress = () => {
+        hint.textContent = backupMode
+            ? 'Type one of the backup codes you saved. Each one works once.'
+            : telegramHint;
+        label.textContent = backupMode ? 'Backup code' : 'Six digit code';
+        toggle.textContent = backupMode
+            ? 'Go back to the Telegram code'
+            : "Can't reach Telegram? Use a backup code";
+        field.value = '';
+        field.placeholder = backupMode ? 'xxxxx-xxxxx' : '000000';
+        field.maxLength = backupMode ? 12 : 6;
+        field.inputMode = backupMode ? 'text' : 'numeric';
+        field.classList.toggle('tg-otp', !backupMode);
+        // The chat is not going to finish this one, so stop suggesting it will.
+        waiting.hidden = backupMode;
+        field.focus();
+    };
+    dress();
 
     const submit = async () => {
-        const code = field.value.replace(/\D/g, '');
         const msg = document.getElementById('authMsg');
-        if (code.length !== 6) {
+        const typed = field.value.trim();
+        const digits = typed.replace(/\D/g, '');
+        const letters = typed.replace(/[^a-zA-Z0-9]/g, '');
+
+        if (backupMode ? letters.length !== 10 : digits.length !== 6) {
             msg.className = 'auth-msg error';
-            msg.textContent = 'Enter all six digits.';
+            msg.textContent = backupMode
+                ? 'A backup code is ten characters, like xxxxx-xxxxx.'
+                : 'Enter all six digits.';
             return;
         }
+
         msg.className = 'auth-msg';
         msg.textContent = 'Checking...';
         try {
             const res = await fetch('/api/telegram-link', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'verify', challenge: challenge.challenge, code }),
+                body: JSON.stringify({
+                    action: backupMode ? 'verify_backup' : 'verify',
+                    challenge: challenge.challenge,
+                    code: backupMode ? typed : digits,
+                }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'That did not work');
             stopTwofaPoll();
             showAuthPane('login');
             msg.textContent = '';
-            finishSignIn(data.user, data.token, username, password);
+            finishSignIn(
+                data.user,
+                data.token,
+                username,
+                password,
+                backupMode
+                    ? `Backup code used. ${data.backup_left} left.`
+                    : undefined
+            );
         } catch (e) {
             msg.className = 'auth-msg error';
             msg.textContent = e.message;
@@ -518,6 +568,11 @@ function beginTwofa(challenge, username, password) {
             e.preventDefault();
             submit();
         }
+    };
+    toggle.onclick = () => {
+        backupMode = !backupMode;
+        document.getElementById('authMsg').textContent = '';
+        dress();
     };
     document.getElementById('twofaCancel').onclick = () => {
         stopTwofaPoll();
@@ -602,6 +657,7 @@ async function tgRefresh() {
             ? 'Connected' + (telegram.username ? ' to @' + telegram.username : '') + '.'
             : 'Not connected yet.';
         document.getElementById('tgTwofa').checked = !!(telegram && telegram.twofa);
+        if (linked) tgBackupRefresh();
     } catch (e) {
         state.textContent = e.message;
     }
@@ -673,9 +729,130 @@ document.getElementById('tgTwofa')?.addEventListener('change', async (e) => {
     try {
         await tgApi({ action: 'twofa', enabled: e.target.checked });
         showToast(e.target.checked ? 'Sign in approval is on.' : 'Sign in approval is off.');
-        tgSay('');
+        // Turning it on with nothing to fall back on is how people lock
+        // themselves out, so say so at the moment it becomes true.
+        tgSay(
+            e.target.checked && !backupRemaining
+                ? 'Make some backup codes below. Without them, losing Telegram ' +
+                      'means losing the account.'
+                : ''
+        );
     } catch (err) {
         e.target.checked = !e.target.checked;
         tgSay(err.message, true);
     }
+});
+
+/* -- BACKUP CODES -- */
+/*
+ * The way back in when the chat is gone. Made here, shown exactly once, and
+ * spent one at a time in the sign in modal. Nothing on this page can read them
+ * back afterwards, because the server only ever kept their hashes.
+ */
+let backupRemaining = 0;
+let backupCodes = [];
+let backupArmed = false;
+let backupArmTimer = null;
+
+function backupDisarm() {
+    clearTimeout(backupArmTimer);
+    backupArmed = false;
+}
+
+function backupButtonLabel(total) {
+    return total ? 'Replace backup codes' : 'Generate backup codes';
+}
+
+async function tgBackupRefresh() {
+    const state = document.getElementById('tgBackupState');
+    if (!state) return;
+
+    // Anything on screen belongs to the last visit and cannot be shown again.
+    document.getElementById('tgBackupCodes').hidden = true;
+    document.getElementById('tgBackupActions').hidden = true;
+    backupCodes = [];
+    backupDisarm();
+
+    try {
+        const { total, remaining } = await tgApi({ action: 'backup_status' });
+        backupRemaining = remaining;
+        state.textContent = !total
+            ? 'None yet. Nothing to fall back on if Telegram goes missing.'
+            : remaining
+              ? `${remaining} of ${total} still unused.`
+              : 'All used. Make a fresh set.';
+        document.getElementById('tgBackupBtn').textContent = backupButtonLabel(total);
+    } catch (e) {
+        state.textContent = e.message;
+    }
+}
+
+document.getElementById('tgBackupBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+
+    // Replacing a set someone may be relying on is worth one deliberate second,
+    // so the first press only arms the second.
+    if (backupRemaining && !backupArmed) {
+        backupArmed = true;
+        btn.textContent = 'Press again to replace them';
+        tgSay('The codes you have now stop working the moment you do.');
+        backupArmTimer = setTimeout(() => {
+            backupDisarm();
+            btn.textContent = backupButtonLabel(backupRemaining);
+            tgSay('');
+        }, 8000);
+        return;
+    }
+    backupDisarm();
+
+    btn.disabled = true;
+    tgSay('Making a fresh set...');
+    try {
+        const { codes } = await tgApi({ action: 'backup_generate' });
+        backupCodes = codes;
+        backupRemaining = codes.length;
+
+        const box = document.getElementById('tgBackupCodes');
+        box.innerHTML = codes.map((code) => `<span>${escHtml(code)}</span>`).join('');
+        box.hidden = false;
+        document.getElementById('tgBackupActions').hidden = false;
+        document.getElementById('tgBackupState').textContent =
+            `${codes.length} of ${codes.length} still unused.`;
+        btn.textContent = backupButtonLabel(codes.length);
+        tgSay('Save these now. They are not shown again.');
+    } catch (err) {
+        tgSay(err.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById('tgBackupCopy')?.addEventListener('click', async () => {
+    if (!backupCodes.length) return;
+    await navigator.clipboard.writeText(backupCodes.join('\n')).catch(() => {});
+    showToast('Backup codes copied.');
+});
+
+document.getElementById('tgBackupDownload')?.addEventListener('click', () => {
+    if (!backupCodes.length) return;
+    const text =
+        `QR Maker backup codes for ${currentUser?.username || 'your account'}\n` +
+        `Made ${new Date().toLocaleString()}\n` +
+        'Each one signs you in once, in place of the Telegram approval.\n\n' +
+        backupCodes.join('\n') +
+        '\n';
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'qr-maker-backup-codes.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+document.getElementById('tgBackupDone')?.addEventListener('click', () => {
+    backupCodes = [];
+    document.getElementById('tgBackupCodes').innerHTML = '';
+    document.getElementById('tgBackupCodes').hidden = true;
+    document.getElementById('tgBackupActions').hidden = true;
+    tgSay('');
 });

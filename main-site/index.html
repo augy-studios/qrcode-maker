@@ -292,13 +292,16 @@
             </form>
             <form id="authTwofaForm" style="display:none" action="#" onsubmit="return false">
                 <p class="tg-hint" id="twofaHint">Check Telegram for the code.</p>
-                <label class="field-label">Six digit code</label>
+                <label class="field-label" id="twofaLabel">Six digit code</label>
                 <input class="field-input tg-otp" id="twofaCode" type="text" inputmode="numeric"
                     maxlength="6" placeholder="000000" autocomplete="one-time-code" />
                 <button type="button" class="btn-primary full-width mt-16" id="twofaSubmit">Confirm</button>
                 <p class="tg-hint tg-waiting" id="twofaWaiting">
                     Or tap Approve in the chat and this signs you in by itself.
                 </p>
+                <button type="button" class="btn-link full-width" id="twofaBackupToggle" hidden>
+                    Can't reach Telegram? Use a backup code
+                </button>
                 <button type="button" class="btn-ghost full-width" id="twofaCancel">Cancel</button>
             </form>
             <p class="auth-msg" id="authMsg"></p>
@@ -343,6 +346,32 @@
                         <input type="checkbox" id="tgTwofa" />
                         <span>Ask Telegram to approve every sign in</span>
                     </label>
+
+                    <!-- BACKUP CODES -->
+                    <div class="tg-backup" id="tgBackup">
+                        <p class="modal-section-label">Backup codes</p>
+                        <p class="tg-state" id="tgBackupState">Checking...</p>
+                        <p class="tg-hint">
+                            Single use codes that stand in for Telegram when you cannot
+                            reach it. Keep them somewhere that is not your phone.
+                        </p>
+                        <div class="tg-backup-codes" id="tgBackupCodes" hidden></div>
+                        <div class="tg-backup-actions" id="tgBackupActions" hidden>
+                            <button class="btn-ghost" type="button" id="tgBackupCopy">
+                                Copy all
+                            </button>
+                            <button class="btn-ghost" type="button" id="tgBackupDownload">
+                                Download
+                            </button>
+                            <button class="btn-ghost" type="button" id="tgBackupDone">
+                                I have saved them
+                            </button>
+                        </div>
+                        <button class="btn-ghost full-width" type="button" id="tgBackupBtn">
+                            Generate backup codes
+                        </button>
+                    </div>
+
                     <button class="btn-ghost full-width" type="button" id="tgUnlinkBtn">
                         Disconnect
                     </button>

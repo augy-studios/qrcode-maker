@@ -969,6 +969,65 @@ textarea.field-input {
   cursor: pointer;
 }
 
+/* The way past Telegram when Telegram cannot be reached. Deliberately quiet:
+   it is the exception, and it should read like one. */
+.btn-link {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  padding: 10px 0 2px;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  color: var(--ink);
+}
+
+/* ── BACKUP CODES ── */
+.tg-backup {
+  margin: 4px 0 14px;
+}
+
+.tg-backup .modal-section-label {
+  margin-top: 0;
+}
+
+.tg-backup-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 10px;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--ink);
+}
+
+/* One tap or click takes a whole code rather than half of one. */
+.tg-backup-codes span {
+  user-select: all;
+}
+
+.tg-backup-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tg-backup-actions .btn-ghost {
+  flex: 1;
+  justify-content: center;
+  padding: 9px 8px;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 480px) {
   .tg-code-row {
     flex-direction: column;
@@ -976,5 +1035,9 @@ textarea.field-input {
 
   .tg-code-row .btn-ghost {
     justify-content: center;
+  }
+
+  .tg-backup-actions {
+    flex-direction: column;
   }
 }

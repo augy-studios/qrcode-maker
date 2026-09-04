@@ -243,6 +243,14 @@ digit field, and two things then race each other: whatever gets typed into that
 field, and a poll watching for the Sign In button being pressed in the chat.
 Whichever lands first signs you in, and the other stops.
 
+The same answer carries `backup_available`, which decides whether the modal
+offers the third way to finish: a backup code, made under My QRs and typed into
+the same field. That route never touches the bot, which is the point of it, and
+it is the only thing standing between a lost phone and a lost account. Set
+`BACKUP_CODE_SECRET` on the portal if you want those hashed with a key that is
+not the service key; without it the service key is used, and either way the
+codes themselves are never stored.
+
 The approval page deserves a note. The Sign In button in Telegram opens a plain
 `GET`, and a `GET` never approves anything. It draws a page naming the account,
 the address and the browser, with a single button that `POST`s back. That split
@@ -312,6 +320,12 @@ you in. The browser you started from should follow within a couple of seconds.
 
 **Refusing.** Start a sign in and press This was not me. The waiting browser
 should give up rather than hang.
+
+**Backup codes.** With approval on, open My QRs and generate a set. Sign out,
+sign back in, and press the line under the code field instead of touching
+Telegram. Type one of the codes. You should be let in, the count in the panel
+should drop by one, and the prompt in the chat should turn into a notice saying
+a backup code was used. The same code should not work a second time.
 
 **Guessing.** Start a sign in and type three wrong codes. A warning should
 arrive in the chat unprompted. Two more and the request should be thrown away

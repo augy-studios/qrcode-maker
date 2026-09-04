@@ -113,6 +113,16 @@ scanner, so a bare visit shows the page and only the button press acts.
 Tokens are short lived and single use. Deep links and pull codes last ten
 minutes, sign in challenges last five.
 
+**Backup codes, when this chat cannot answer.** Approval is only as reachable
+as one Telegram account, so the portal can hand out ten single use codes under
+My QRs. They are shown once, stored only as hashes, and one of them finishes a
+held back sign in in place of anything happening here. Wrong ones count against
+the same five attempt limit as wrong digits. The bot is not part of that route
+and only hears about it afterwards, at which point it says in the chat that a
+code was spent and how many are left, since a sign in that went around Telegram
+is worth knowing about. Signed back in, Disconnect on the portal turns approval
+off and lets a new chat be linked.
+
 Wrong codes are counted. Three wrong answers against a live sign in and the bot
 warns the account owner unprompted, since reaching the code step at all means
 somebody already has the password. Five and the request is thrown away. Pull

@@ -13,8 +13,15 @@ import {
     iso,
     markToken,
     randomHex,
+    requestMeta,
     underRateLimit,
 } from '../lib/telegram.js';
+import {
+    CODE_COUNT,
+    backupSummary,
+    consumeCode,
+    generateCodes,
+} from '../lib/backup-codes.js';
 
 // A signed in account gets ten redeem attempts every ten minutes. Wrong codes
 // match no row at all, so this is the only place the guessing can be counted.
@@ -26,21 +33,24 @@ const REDEEM_WINDOW_SECONDS = 600;
  *
  * POST actions, all of them JSON in and JSON out:
  *
- *   status      is this account linked, and is sign in approval on
- *   deeplink    mint a token and hand back a t.me start link to open
- *   poll        has the bot confirmed that deep link yet
- *   redeem      claim a six digit code the bot handed the user
- *   unlink      drop the link
- *   twofa       turn sign in approval on or off
- *   challenge   where has a held back sign in got to
- *   verify      finish a held back sign in with six digits
+ *   status           is this account linked, and is sign in approval on
+ *   deeplink         mint a token and hand back a t.me start link to open
+ *   poll             has the bot confirmed that deep link yet
+ *   redeem           claim a six digit code the bot handed the user
+ *   unlink           drop the link
+ *   twofa            turn sign in approval on or off
+ *   backup_status    how many backup codes are left on this account
+ *   backup_generate  mint a fresh set, shown once and never again
+ *   challenge        where has a held back sign in got to
+ *   verify           finish a held back sign in with six digits
+ *   verify_backup    finish it with a backup code instead, Telegram unreachable
  *
  * One GET action, because it is opened by tapping a button in Telegram:
  *
  *   approve     the magic link, one tap instead of six digits
  *
- * Everything except challenge, verify and approve needs a portal session, for
- * the obvious reason that those three run before there is one.
+ * Everything except challenge, verify, verify_backup and approve needs a portal
+ * session, for the obvious reason that those four run before there is one.
  */
 export default async function handler(req, res) {
     if (req.method === 'GET') return handleApprove(req, res);
@@ -50,16 +60,19 @@ export default async function handler(req, res) {
 
     try {
         switch (action) {
-            case 'approve_confirm': return approveConfirm(req, res);
-            case 'challenge': return challengeStatus(req, res);
-            case 'verify':    return verifyChallenge(req, res);
-            case 'status':    return withUser(req, res, status);
-            case 'deeplink':  return withUser(req, res, deeplink);
-            case 'poll':      return withUser(req, res, poll);
-            case 'redeem':    return withUser(req, res, redeem);
-            case 'unlink':    return withUser(req, res, unlink);
-            case 'twofa':     return withUser(req, res, twofa);
-            default:          return err(res, 'Unknown action');
+            case 'approve_confirm':  return approveConfirm(req, res);
+            case 'challenge':        return challengeStatus(req, res);
+            case 'verify':           return verifyChallenge(req, res);
+            case 'verify_backup':    return verifyBackup(req, res);
+            case 'status':           return withUser(req, res, status);
+            case 'deeplink':         return withUser(req, res, deeplink);
+            case 'poll':             return withUser(req, res, poll);
+            case 'redeem':           return withUser(req, res, redeem);
+            case 'unlink':           return withUser(req, res, unlink);
+            case 'twofa':            return withUser(req, res, twofa);
+            case 'backup_status':    return withUser(req, res, backupStatus);
+            case 'backup_generate':  return withUser(req, res, backupGenerate);
+            default:                 return err(res, 'Unknown action');
         }
     } catch (e) {
         return err(res, e.message || 'Something went wrong', e.status || 500);
@@ -247,11 +260,14 @@ async function challengeStatus(req, res) {
     return ok(res, { status: token.status });
 }
 
-async function verifyChallenge(req, res) {
-    const { challenge } = req.body;
-    const code = String(req.body.code || '').replace(/\D/g, '');
-    if (!challenge || code.length !== 6) return err(res, 'Enter the six digits.');
-
+/**
+ * Load a held back sign in and refuse it if it is not still answerable.
+ *
+ * Shared by both ways of finishing one, digits and backup code, so a request
+ * that is expired, refused or burned reads the same whichever is offered.
+ * Returns either the row or the { message, status } to send back.
+ */
+async function openChallenge(challenge) {
     const { data: token } = await supabase
         .from(TOKENS)
         .select('*, qr_users(username)')
@@ -259,16 +275,32 @@ async function verifyChallenge(req, res) {
         .eq('kind', 'push_otp')
         .maybeSingle();
 
-    if (!token) return err(res, 'That sign in request is gone. Start again.', 404);
-    if (token.status === 'denied') return err(res, 'That sign in was refused.', 403);
+    if (!token)
+        return { message: 'That sign in request is gone. Start again.', status: 404 };
+    if (token.status === 'denied')
+        return { message: 'That sign in was refused.', status: 403 };
     if (token.burned)
-        return err(res, 'That request was cancelled after too many wrong codes.', 429);
+        return {
+            message: 'That request was cancelled after too many wrong codes.',
+            status: 429,
+        };
     if (!['pending', 'delivered'].includes(token.status))
-        return err(res, 'That sign in request is no longer open.', 409);
+        return { message: 'That sign in request is no longer open.', status: 409 };
     if (isExpired(token)) {
         await markToken(token.id, 'expired');
-        return err(res, 'That request expired. Sign in again.', 410);
+        return { message: 'That request expired. Sign in again.', status: 410 };
     }
+
+    return { token };
+}
+
+async function verifyChallenge(req, res) {
+    const { challenge } = req.body;
+    const code = String(req.body.code || '').replace(/\D/g, '');
+    if (!challenge || code.length !== 6) return err(res, 'Enter the six digits.');
+
+    const { token, message, status } = await openChallenge(challenge);
+    if (!token) return err(res, message, status);
 
     if (token.code !== code) {
         // The bot watches these columns. It warns the account owner part way
@@ -297,6 +329,72 @@ async function verifyChallenge(req, res) {
         token: sessionToken,
         user: { id: token.user_id, username: token.qr_users?.username },
     });
+}
+
+// ------------------------------------------------------------ backup codes --
+
+/**
+ * Finish a held back sign in with a backup code, Telegram out of reach.
+ *
+ * This is the only route that does not touch the chat at all, which is the
+ * entire point of it: the phone is lost, the account is gone, the app will not
+ * open. It is still gated on the password, because a backup code alone opens
+ * nothing without a live challenge to spend it against, and wrong ones burn the
+ * same counter as wrong digits so guessing costs the attacker the request.
+ */
+async function verifyBackup(req, res) {
+    const { challenge } = req.body;
+    const code = String(req.body.code || '');
+    if (!challenge || !code.trim()) return err(res, 'Enter one of your backup codes.');
+
+    const { token, message, status } = await openChallenge(challenge);
+    if (!token) return err(res, message, status);
+
+    const spent = await consumeCode(token.user_id, code, requestMeta(req));
+    if (!spent) {
+        const { burned, left } = await countWrongCode(token);
+        if (burned) {
+            return err(
+                res,
+                `That is ${MAX_ATTEMPTS} wrong codes, so the request has been ` +
+                    'cancelled. Sign in again to get a fresh one.',
+                429
+            );
+        }
+        return err(
+            res,
+            'That backup code is not one of yours, or it has been used already. ' +
+                `${left} ${left === 1 ? 'try' : 'tries'} left.`,
+            401
+        );
+    }
+
+    const sessionToken = await activateSession(token);
+    // The bot reads via and backup_left off the token to say what happened in
+    // the chat, which is where someone who did not do this would notice.
+    await markToken(token.id, 'used', {
+        meta: { ...(token.meta || {}), via: 'backup', backup_left: spent.remaining },
+    });
+
+    return ok(res, {
+        token: sessionToken,
+        user: { id: token.user_id, username: token.qr_users?.username },
+        backup_left: spent.remaining,
+    });
+}
+
+async function backupStatus(req, res, { userId }) {
+    const summary = await backupSummary(userId);
+    return ok(res, { ...summary, size: CODE_COUNT });
+}
+
+/**
+ * Mint a fresh set and return it in the clear, the only time it is ever
+ * readable. Anything the account had before is thrown away, used or not.
+ */
+async function backupGenerate(req, res, { userId }) {
+    const codes = await generateCodes(userId);
+    return ok(res, { codes, size: CODE_COUNT, generated_at: new Date().toISOString() });
 }
 
 // -------------------------------------------------------------- magic link --
