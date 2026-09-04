@@ -1,4 +1,4 @@
-const CACHE = "uwuqr-v5";
+const CACHE = "uwuqr-v6";
 
 const ASSETS = [
   "/",
