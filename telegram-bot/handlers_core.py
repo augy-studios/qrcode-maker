@@ -558,6 +558,66 @@ async def _cb_push_deny(event, button):
     )
 
 
+@dispatch.on("backup_approve")
+async def _cb_backup_approve(event, button):
+    """Let the portal mint a set of backup codes.
+
+    Confirmed is as far as this goes. The codes themselves are made by the
+    portal, on the page that is polling for this, so they only ever exist in
+    front of whoever asked, and never in a chat that could be read later.
+    """
+    token = await linking.find_token(button["payload"]["token_id"])
+    message = await event.get_message()
+
+    if token is None or token["status"] not in ("pending", "delivered"):
+        await event.answer("That request is no longer open.", alert=True)
+        await ui.edit_rich(
+            message,
+            "That backup code request has already been dealt with. Ask again "
+            "from the portal if you still want a set.",
+        )
+        return
+
+    if linking.is_expired(token):
+        await linking.mark_token(token["id"], "expired", notified=True)
+        await event.answer("That request expired.", alert=True)
+        await ui.edit_rich(
+            message,
+            "That backup code request sat here too long and has expired. Ask "
+            "again from the portal.",
+        )
+        return
+
+    await linking.mark_token(token["id"], "confirmed")
+    await event.answer("Allowed.")
+    await ui.edit_rich(
+        message,
+        "<b>Allowed</b>\n"
+        "\n"
+        "The portal is drawing the codes now. They appear on the page you asked "
+        "from, once.",
+    )
+
+
+@dispatch.on("backup_deny")
+async def _cb_backup_deny(event, button):
+    token_id = button["payload"].get("token_id")
+    if token_id:
+        await linking.mark_token(token_id, "denied", notified=True)
+    await event.answer("Refused.")
+    await ui.edit_rich(
+        await event.get_message(),
+        "<b>Refused</b>\n"
+        "\n"
+        "No codes were made and the page waiting on this has been told so.\n"
+        "\n"
+        "That request came from a browser already signed in to your account, so "
+        "if it was not you, someone is holding a session they should not have. "
+        "Change your password, which throws every session away.",
+        buttons=ui.keyboard(ui.row(ui.portal_button("Change my password"))),
+    )
+
+
 @dispatch.on("dismiss")
 async def _cb_dismiss(event, button):
     await event.answer()

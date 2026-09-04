@@ -748,15 +748,33 @@ document.getElementById('tgTwofa')?.addEventListener('change', async (e) => {
  * The way back in when the chat is gone. Made here, shown exactly once, and
  * spent one at a time in the sign in modal. Nothing on this page can read them
  * back afterwards, because the server only ever kept their hashes.
+ *
+ * Making a set is itself held back until Telegram allows it. A signed in tab is
+ * not proof of much: a set of codes outlives the session that asked for it, so
+ * the account has to say yes from the chat before any of them exist.
  */
 let backupRemaining = 0;
 let backupCodes = [];
 let backupArmed = false;
 let backupArmTimer = null;
+let backupRequestId = null;
+let backupPoll = null;
 
 function backupDisarm() {
     clearTimeout(backupArmTimer);
     backupArmed = false;
+}
+
+function stopBackupPoll() {
+    if (backupPoll) {
+        clearInterval(backupPoll);
+        backupPoll = null;
+    }
+}
+
+function backupBusy(busy) {
+    const btn = document.getElementById('tgBackupBtn');
+    if (btn) btn.disabled = busy;
 }
 
 function backupButtonLabel(total) {
@@ -785,6 +803,70 @@ async function tgBackupRefresh() {
     } catch (e) {
         state.textContent = e.message;
     }
+
+    // A request left waiting when the panel was closed is still live in the
+    // chat, so pick the wait back up rather than stranding whoever approves it.
+    if (backupRequestId) waitForBackupApproval();
+}
+
+function showBackupCodes(codes) {
+    backupCodes = codes;
+    backupRemaining = codes.length;
+
+    const box = document.getElementById('tgBackupCodes');
+    box.innerHTML = codes.map((code) => `<span>${escHtml(code)}</span>`).join('');
+    box.hidden = false;
+    document.getElementById('tgBackupActions').hidden = false;
+    document.getElementById('tgBackupState').textContent =
+        `${codes.length} of ${codes.length} still unused.`;
+    document.getElementById('tgBackupBtn').textContent = backupButtonLabel(codes.length);
+    tgSay('Save these now. They are not shown again.');
+}
+
+/** Watch the request until the chat answers it, one way or the other. */
+function waitForBackupApproval() {
+    stopBackupPoll();
+    backupBusy(true);
+
+    const started = Date.now();
+    backupPoll = setInterval(async () => {
+        // The request itself only lives five minutes. Waiting past that is
+        // waiting for something the server has already thrown away.
+        if (Date.now() - started > 5.5 * 60 * 1000) {
+            stopBackupPoll();
+            backupBusy(false);
+            backupRequestId = null;
+            tgSay('That request timed out. Ask for the codes again.', true);
+            return;
+        }
+
+        try {
+            const data = await tgApi({ action: 'backup_poll', request: backupRequestId });
+
+            if (data.status === 'ready') {
+                stopBackupPoll();
+                backupBusy(false);
+                backupRequestId = null;
+                showBackupCodes(data.codes);
+                return;
+            }
+
+            const dead = {
+                denied: 'That was refused from Telegram. No codes were made.',
+                expired: 'That request expired before it was approved. Ask again.',
+                gone: 'That request is no longer there. Ask again.',
+                used: 'That request has already been answered somewhere else.',
+            };
+            if (dead[data.status]) {
+                stopBackupPoll();
+                backupBusy(false);
+                backupRequestId = null;
+                tgSay(dead[data.status], data.status !== 'used');
+            }
+        } catch {
+            // A dropped poll is not worth reporting. The next one covers it.
+        }
+    }, 2500);
 }
 
 document.getElementById('tgBackupBtn')?.addEventListener('click', async (e) => {
@@ -805,25 +887,16 @@ document.getElementById('tgBackupBtn')?.addEventListener('click', async (e) => {
     }
     backupDisarm();
 
-    btn.disabled = true;
-    tgSay('Making a fresh set...');
+    backupBusy(true);
+    tgSay('Asking Telegram...');
     try {
-        const { codes } = await tgApi({ action: 'backup_generate' });
-        backupCodes = codes;
-        backupRemaining = codes.length;
-
-        const box = document.getElementById('tgBackupCodes');
-        box.innerHTML = codes.map((code) => `<span>${escHtml(code)}</span>`).join('');
-        box.hidden = false;
-        document.getElementById('tgBackupActions').hidden = false;
-        document.getElementById('tgBackupState').textContent =
-            `${codes.length} of ${codes.length} still unused.`;
-        btn.textContent = backupButtonLabel(codes.length);
-        tgSay('Save these now. They are not shown again.');
+        const { request, hint } = await tgApi({ action: 'backup_request' });
+        backupRequestId = request;
+        tgSay(`${hint || 'Approve it in Telegram'}. The codes appear here once you do.`);
+        waitForBackupApproval();
     } catch (err) {
+        backupBusy(false);
         tgSay(err.message, true);
-    } finally {
-        btn.disabled = false;
     }
 });
 

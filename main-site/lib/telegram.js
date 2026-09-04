@@ -63,6 +63,46 @@ export async function startTwofaChallenge(userId, telegramId, meta) {
     return data;
 }
 
+/**
+ * Ask the linked chat to allow a fresh set of backup codes.
+ *
+ * A set of backup codes is a standing way past the second factor, so making one
+ * is worth as much to a thief as a sign in is, and a session on its own is not
+ * enough to authorise it. Nothing is minted here: the row only records that the
+ * account asked, and the codes are drawn once the chat has said yes.
+ *
+ * The code column is filled with hex nobody ever sees. This kind is approved by
+ * tapping a button, never by typing digits, and hex keeps it out of the way of
+ * the six digit codes sharing the live code index.
+ */
+export async function startBackupRequest(userId, telegramId, meta) {
+    // Only the newest request stays live, so a forgotten prompt in the chat
+    // cannot be tapped later to mint a set nobody is watching for.
+    await supabase
+        .from(TOKENS)
+        .update({ status: 'expired' })
+        .eq('kind', 'backup_gen')
+        .eq('user_id', userId)
+        .in('status', ['pending', 'delivered']);
+
+    const { data, error } = await supabase
+        .from(TOKENS)
+        .insert({
+            kind: 'backup_gen',
+            code: randomHex(16),
+            status: 'pending',
+            user_id: userId,
+            telegram_id: telegramId,
+            meta: meta || {},
+            expires_at: iso(PUSH_TTL_MS),
+        })
+        .select('id, expires_at')
+        .single();
+
+    if (error) throw new Error('Could not ask Telegram about that.');
+    return data;
+}
+
 /** Turn a pre minted session token into a session the browser can use. */
 export async function activateSession(token) {
     const { error } = await supabase.from('qr_sessions').insert({

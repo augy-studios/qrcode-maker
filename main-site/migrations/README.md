@@ -12,6 +12,7 @@ the file, and running it. Each file is written to be safe to run twice.
 | `0001_telegram_bot_linking.sql` | `qr_telegram_links` and `qr_tokens`, backing the Telegram bot's account linking and two factor sign in |
 | `0002_token_attempt_limits.sql` | Guessing limits: attempt counters on `qr_tokens`, plus `qr_rate_limits` and the `qr_rate_hit` function |
 | `0003_backup_codes.sql` | `qr_backup_codes`, the single use codes that finish a sign in when Telegram cannot be reached |
+| `0004_backup_code_requests.sql` | The `backup_gen` token kind, so making a set of backup codes has to be approved in the chat first |
 
 Record which ones you have applied somewhere you will remember, since Supabase
 does not track these for you unless you adopt the Supabase CLI.

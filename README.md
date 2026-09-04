@@ -55,9 +55,10 @@ Everything the site does, in a chat, plus the things a chat is better at.
 - **Sign in approval.** With it turned on, a correct password is not enough to
   get into the portal. The attempt is held until you allow it in Telegram,
   either by typing six digits or by tapping through an approval page.
-- **Backup codes**, ten of them, made on the portal and kept somewhere that is
-  not your phone. Each one finishes a held back sign in on its own, for the day
-  Telegram is not reachable at all.
+- **Backup codes**, ten of them, kept somewhere that is not your phone. Each one
+  finishes a held back sign in on its own, for the day Telegram is not reachable
+  at all. Making a set is itself approved from the chat, because a set is a
+  standing way past it.
 
 It is a private chat bot and ignores groups. Codes it makes are identical, byte
 for byte, to codes the site makes from the same input.
@@ -77,17 +78,21 @@ are standing on when you start.
 | Pull code | Telegram | Six digits typed into the portal, the bot confirms in the chat |
 | Push code | A portal sign in | The bot delivers the digits unprompted, you type them into the page |
 | Magic link | A portal sign in | The same message carries a button, and an approval page finishes it |
+| Backup codes | The My QRs panel | The bot asks whether to make a set, and the portal shows it once |
 
 Every token is single use and short lived, wrong codes are counted, and a
-password is never typed into a chat on any of the four routes.
+password is never typed into a chat on any of these routes.
 
 **When the chat is gone.** Sign in approval leans on one account being
-reachable, so an account with it turned on can hold ten backup codes, made
-under My QRs and shown once. A backup code is typed into the same field the
-six digits would go in and finishes the sign in without Telegram being involved
-at all. Wrong ones burn the same attempt counter, only the hashes are stored,
-and the bot reports in the chat whenever one is spent. Once back in, Disconnect
-turns approval off and a fresh Telegram account can be linked.
+reachable, so an account with it turned on can hold ten backup codes. Asking
+for a set puts a prompt in the chat, and only once that is approved does the
+portal draw them, once, on the page that asked. That gate matters: a set
+outlives the session that requested it, so a stolen session should not be able
+to mint one quietly. A code is then typed into the same field the six digits
+would go in and finishes a sign in without Telegram being involved at all.
+Wrong ones burn the same attempt counter, only the hashes are stored, and the
+bot reports in the chat whenever one is spent. Once back in, Disconnect turns
+approval off and a fresh Telegram account can be linked.
 
 ## Running it yourself
 

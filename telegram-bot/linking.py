@@ -20,14 +20,20 @@ direction the token travels and who issues it.
                  the redemption endpoint and the browser, still polling, is
                  signed in without any digits changing hands.
 
-The bot owns the Telegram half of all four. The portal half lives in
+  Backup gen     The portal asks to mint a set of backup codes. The bot puts
+                 the request in the chat with Approve and Refuse, and the codes
+                 are only drawn once it is confirmed. They are made by the
+                 portal, in front of whoever asked, and never travel through
+                 here.
+
+The bot owns the Telegram half of all five. The portal half lives in
 main-site/api/telegram-link.js.
 
-There is a fifth way to finish a held back sign in, and the bot has no half of
-it at all: a backup code, typed into the portal when this chat cannot be
-reached. The bot only ever hears about it afterwards, from the token, and says
-so in the chat, because a sign in that went around Telegram is exactly the sort
-of thing the owner should be told about.
+Spending a backup code is the one thing the bot has no half of. It happens on
+the portal when this chat cannot be reached, which is the entire point of it,
+and the bot only hears about it afterwards, from the token. It says so in the
+chat anyway, because a sign in that went around Telegram is exactly the sort of
+thing the owner should be told about.
 """
 
 import asyncio
@@ -238,6 +244,7 @@ async def poll_forever(client) -> None:
 async def _sweep(client) -> None:
     await _expire_stale()
     await _deliver_push_prompts(client)
+    await _deliver_backup_requests(client)
     await _warn_about_guessing(client)
     await _announce_completions(client)
 
@@ -319,6 +326,71 @@ async def _deliver_one(client, token: dict) -> None:
     await supa.update(TABLE_TOKENS, {"id": f"eq.{token['id']}"}, patch)
 
 
+async def _deliver_backup_requests(client) -> None:
+    """Ask before a set of backup codes is made on the portal."""
+    pending = await supa.select(
+        TABLE_TOKENS,
+        {"kind": "eq.backup_gen", "status": "eq.pending"},
+        columns="*,qr_users(username)",
+        order="created_at.asc",
+        limit=20,
+    )
+    await _for_each(pending, lambda token: _deliver_backup_one(client, token))
+
+
+async def _deliver_backup_one(client, token: dict) -> None:
+    if not token.get("telegram_id"):
+        await mark_token(token["id"], "expired")
+        return
+    if not await db.mark_seen(f"backup:{token['id']}"):
+        return
+
+    username = (token.get("qr_users") or {}).get("username") or "your account"
+    meta = token.get("meta") or {}
+    where = meta.get("ip") or "an unrecognised address"
+    agent = meta.get("agent") or "an unknown browser"
+
+    buttons = ui.keyboard(
+        ui.row(
+            await ui.inline_button(
+                "Make the codes",
+                "backup_approve",
+                {"token_id": token["id"]},
+                owner_id=token["telegram_id"],
+            )
+        ),
+        ui.row(
+            await ui.inline_button(
+                "No, I did not ask",
+                "backup_deny",
+                {"token_id": token["id"]},
+                owner_id=token["telegram_id"],
+            )
+        ),
+    )
+
+    text = (
+        "<b>Backup codes requested</b>\n"
+        "\n"
+        f"Someone signed in to {ui.esc(username)} is asking for a fresh set of "
+        "backup codes.\n"
+        f"From {ui.esc(where)} using {ui.esc(agent)}.\n"
+        "\n"
+        "Each code signs in once without asking here, so a set is a standing "
+        "way past this chat. Any codes the account already has stop working the "
+        "moment a new set is made.\n"
+        "\n"
+        "Approve only if you are looking at that page right now. The request "
+        "drops itself in five minutes."
+    )
+
+    message = await ui.send_rich(client, token["telegram_id"], text, buttons=buttons)
+    patch = {"status": "delivered"}
+    if message is not None:
+        patch["meta"] = dict(meta, chat_id=message.chat_id, message_id=message.id)
+    await supa.update(TABLE_TOKENS, {"id": f"eq.{token['id']}"}, patch)
+
+
 async def _warn_about_guessing(client) -> None:
     """Say something when wrong codes start piling up against a live challenge.
 
@@ -370,7 +442,7 @@ async def _announce_completions(client) -> None:
     finished = await supa.select(
         TABLE_TOKENS,
         {
-            "kind": "in.(pull_otp,push_otp)",
+            "kind": "in.(pull_otp,push_otp,backup_gen)",
             "status": "in.(used,confirmed,expired)",
             "notified": "eq.false",
         },
@@ -378,12 +450,20 @@ async def _announce_completions(client) -> None:
         order="created_at.asc",
         limit=20,
     )
-    # Time expiry is silent. Only a burned token is worth interrupting someone for.
-    worth_saying = [
-        token for token in finished
-        if token.get("burned") or token["status"] in ("used", "confirmed")
-    ]
-    await _for_each(worth_saying, lambda token: _announce_one(client, token))
+    def worth_saying(token: dict) -> bool:
+        # A confirmed backup_gen is only half done: the portal still has to draw
+        # the codes. Saying so at confirmed would announce a set that might
+        # never be made, so this one waits for used.
+        if token["kind"] == "backup_gen":
+            return token["status"] == "used"
+        # Time expiry is silent. Only a burned token is worth interrupting
+        # someone for.
+        return bool(token.get("burned")) or token["status"] in ("used", "confirmed")
+
+    await _for_each(
+        [token for token in finished if worth_saying(token)],
+        lambda token: _announce_one(client, token),
+    )
 
 
 async def _announce_one(client, token: dict) -> None:
@@ -407,6 +487,22 @@ async def _announce_one(client, token: dict) -> None:
             "Change your password. Reaching the code step at all means the "
             "password was right.",
             buttons=ui.keyboard(ui.row(ui.portal_button("Change my password"))),
+        )
+        return
+
+    # The approval already happened in the chat. This turns the prompt into a
+    # record of what it allowed, so the set cannot be made quietly afterwards.
+    if token["kind"] == "backup_gen":
+        await _replace_prompt(
+            client, token, meta,
+            "<b>Backup codes made</b>\n"
+            "\n"
+            f"A fresh set is on screen at the portal now, for {ui.esc(username)}. "
+            "It is shown once and never again, so whoever asked should be writing "
+            "it down.\n"
+            "\n"
+            "Every code the account had before this has stopped working.",
+            buttons=ui.keyboard(ui.row(ui.portal_button("Open My QRs"))),
         )
         return
 

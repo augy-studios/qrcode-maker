@@ -11,9 +11,11 @@ import {
     countWrongCode,
     isExpired,
     iso,
+    linkForUser,
     markToken,
     randomHex,
     requestMeta,
+    startBackupRequest,
     underRateLimit,
 } from '../lib/telegram.js';
 import {
@@ -40,7 +42,8 @@ const REDEEM_WINDOW_SECONDS = 600;
  *   unlink           drop the link
  *   twofa            turn sign in approval on or off
  *   backup_status    how many backup codes are left on this account
- *   backup_generate  mint a fresh set, shown once and never again
+ *   backup_request   ask the chat to allow a fresh set
+ *   backup_poll      has it allowed it yet, and the codes when it has
  *   challenge        where has a held back sign in got to
  *   verify           finish a held back sign in with six digits
  *   verify_backup    finish it with a backup code instead, Telegram unreachable
@@ -71,7 +74,8 @@ export default async function handler(req, res) {
             case 'unlink':           return withUser(req, res, unlink);
             case 'twofa':            return withUser(req, res, twofa);
             case 'backup_status':    return withUser(req, res, backupStatus);
-            case 'backup_generate':  return withUser(req, res, backupGenerate);
+            case 'backup_request':   return withUser(req, res, backupRequest);
+            case 'backup_poll':      return withUser(req, res, backupPoll);
             default:                 return err(res, 'Unknown action');
         }
     } catch (e) {
@@ -389,12 +393,69 @@ async function backupStatus(req, res, { userId }) {
 }
 
 /**
- * Mint a fresh set and return it in the clear, the only time it is ever
- * readable. Anything the account had before is thrown away, used or not.
+ * Ask the chat for permission to mint a set. Nothing is made here.
+ *
+ * A signed in session is not enough on its own, because a set of backup codes
+ * outlives the session that asked for it. Whoever holds the account has to say
+ * yes from Telegram first, which is the same bar the sign in itself clears.
  */
-async function backupGenerate(req, res, { userId }) {
+async function backupRequest(req, res, { userId }) {
+    const link = await linkForUser(userId);
+    if (!link?.telegram_id) {
+        return err(res, 'Connect a Telegram account first.', 409);
+    }
+
+    const request = await startBackupRequest(userId, link.telegram_id, requestMeta(req));
+    return ok(res, {
+        request: request.id,
+        expires_at: request.expires_at,
+        hint: link.telegram_username
+            ? `Approve it in Telegram, @${link.telegram_username}`
+            : 'Approve it in Telegram',
+    });
+}
+
+/**
+ * Where an approval has got to, and the codes themselves once it lands.
+ *
+ * The request is claimed before anything is minted, and the claim only takes if
+ * the row is still confirmed. Two polls crossing therefore leave one winner and
+ * one 'used', rather than two sets where the first one is shown and then
+ * silently replaced by the second.
+ */
+async function backupPoll(req, res, { userId }) {
+    const { request } = req.body;
+    if (!request) return err(res, 'Missing request');
+
+    const { data: token } = await supabase
+        .from(TOKENS)
+        .select('id, status, expires_at')
+        .eq('id', request)
+        .eq('kind', 'backup_gen')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (!token) return ok(res, { status: 'gone' });
+
+    if (isExpired(token) && ['pending', 'delivered'].includes(token.status)) {
+        await markToken(token.id, 'expired');
+        return ok(res, { status: 'expired' });
+    }
+    if (token.status !== 'confirmed') return ok(res, { status: token.status });
+
+    const { data: claimed } = await supabase
+        .from(TOKENS)
+        .update({ status: 'used', consumed_at: new Date().toISOString() })
+        .eq('id', token.id)
+        .eq('status', 'confirmed')
+        .select('id')
+        .maybeSingle();
+    if (!claimed) return ok(res, { status: 'used' });
+
+    // notified stays false, so the bot turns the prompt in the chat into a
+    // record of what it allowed.
     const codes = await generateCodes(userId);
-    return ok(res, { codes, size: CODE_COUNT, generated_at: new Date().toISOString() });
+    return ok(res, { status: 'ready', codes, size: CODE_COUNT });
 }
 
 // -------------------------------------------------------------- magic link --

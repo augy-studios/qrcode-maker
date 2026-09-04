@@ -244,12 +244,17 @@ field, and a poll watching for the Sign In button being pressed in the chat.
 Whichever lands first signs you in, and the other stops.
 
 The same answer carries `backup_available`, which decides whether the modal
-offers the third way to finish: a backup code, made under My QRs and typed into
-the same field. That route never touches the bot, which is the point of it, and
-it is the only thing standing between a lost phone and a lost account. Set
-`BACKUP_CODE_SECRET` on the portal if you want those hashed with a key that is
-not the service key; without it the service key is used, and either way the
-codes themselves are never stored.
+offers the third way to finish: a backup code, typed into the same field.
+Spending one never touches the bot, which is the point of it, and it is the
+only thing standing between a lost phone and a lost account.
+
+Making the set does touch the bot. The panel asks the portal, the portal writes
+a `backup_gen` token, and the sweep puts a prompt in the chat with Make the
+codes and No, I did not ask. The panel polls, and the codes are drawn only
+after the tap, on the page that asked, once. Nothing about them travels through
+Telegram. Set `BACKUP_CODE_SECRET` on the portal if you want them hashed with a
+key that is not the service key; without it the service key is used, and either
+way the codes themselves are never stored.
 
 The approval page deserves a note. The Sign In button in Telegram opens a plain
 `GET`, and a `GET` never approves anything. It draws a page naming the account,
@@ -321,11 +326,18 @@ you in. The browser you started from should follow within a couple of seconds.
 **Refusing.** Start a sign in and press This was not me. The waiting browser
 should give up rather than hang.
 
-**Backup codes.** With approval on, open My QRs and generate a set. Sign out,
-sign back in, and press the line under the code field instead of touching
-Telegram. Type one of the codes. You should be let in, the count in the panel
-should drop by one, and the prompt in the chat should turn into a notice saying
-a backup code was used. The same code should not work a second time.
+**Backup codes, asking.** With approval on, open My QRs and press Generate
+backup codes. A prompt should arrive in the chat within a few seconds, naming
+the address and browser. Press No, I did not ask first: the panel should say it
+was refused and no codes should appear. Ask again and press Make the codes. Ten
+should appear on the page, and the prompt in the chat should turn into a record
+that a set was made.
+
+**Backup codes, using one.** Sign out, sign back in, and press the line under
+the code field instead of touching Telegram. Type one of the codes. You should
+be let in, the count in the panel should drop by one, and the prompt in the chat
+should turn into a notice saying a backup code was used. The same code should
+not work a second time.
 
 **Guessing.** Start a sign in and type three wrong codes. A warning should
 arrive in the chat unprompted. Two more and the request should be thrown away

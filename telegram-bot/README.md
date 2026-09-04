@@ -115,13 +115,20 @@ minutes, sign in challenges last five.
 
 **Backup codes, when this chat cannot answer.** Approval is only as reachable
 as one Telegram account, so the portal can hand out ten single use codes under
-My QRs. They are shown once, stored only as hashes, and one of them finishes a
-held back sign in in place of anything happening here. Wrong ones count against
-the same five attempt limit as wrong digits. The bot is not part of that route
-and only hears about it afterwards, at which point it says in the chat that a
-code was spent and how many are left, since a sign in that went around Telegram
-is worth knowing about. Signed back in, Disconnect on the portal turns approval
-off and lets a new chat be linked.
+My QRs. Asking for a set does not make one: the bot puts the request in the
+chat first, naming the address and browser it came from, with Make the codes
+and No, I did not ask. Only once it is approved does the portal draw the set,
+once, on the page that asked. A set is a standing way past this chat, so
+whoever holds the account has to allow it, and a browser signed in without you
+cannot mint itself a way back in.
+
+They are shown once, stored only as hashes, and one of them finishes a held
+back sign in in place of anything happening here. Wrong ones count against the
+same five attempt limit as wrong digits. Spending a code is the one part the
+bot has no half of, and it only hears afterwards, at which point it says in the
+chat that a code was used and how many are left, since a sign in that went
+around Telegram is worth knowing about. Signed back in, Disconnect on the
+portal turns approval off and lets a new chat be linked.
 
 Wrong codes are counted. Three wrong answers against a live sign in and the bot
 warns the account owner unprompted, since reaching the code step at all means
