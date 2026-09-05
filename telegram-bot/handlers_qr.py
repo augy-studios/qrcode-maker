@@ -15,7 +15,6 @@ from telethon import events
 import db
 import dispatch
 import qrgen
-import supa
 import ui
 from config import (
     MAX_PAYLOAD_CHARS,
@@ -125,6 +124,10 @@ BUILDERS = {
         ],
     },
 }
+
+
+for _name, _spec in BUILDERS.items():
+    dispatch.name_flow(_name, _spec["label"])
 
 
 def _build_payload(flow: str, data: dict) -> str:
@@ -308,15 +311,15 @@ async def deliver_code(client, chat_id: int, sender_id: int, content: str,
 
     history_id = await db.add_history(sender_id, kind, content)
 
+    # Save is offered whether or not there is an account behind it. Without one
+    # the code waits in this chat's own list and moves across on the first
+    # /link, so there is never a moment where saving is the wrong thing to do.
     buttons_row = [
         await ui.inline_button("Show the data", "show_data",
                                {"h": history_id}, owner_id=sender_id),
+        await ui.inline_button("Save", "save_code",
+                               {"h": history_id}, owner_id=sender_id),
     ]
-    if supa.enabled():
-        buttons_row.append(
-            await ui.inline_button("Save to my account", "save_code",
-                                   {"h": history_id}, owner_id=sender_id)
-        )
 
     caption = (
         f"<b>{ui.esc(qrgen.KIND_LABELS.get(kind, 'Code'))}</b>\n"
@@ -391,7 +394,13 @@ async def _advance(client, chat_id: int, sender_id: int, flow_row: dict,
                    value: str) -> None:
     flow = flow_row["flow"]
     if flow not in BUILDERS:
-        await db.clear_flow(sender_id)
+        # Not a builder, so it belongs to whichever module registered it. Only
+        # a flow left behind by an older version reaches the clear below.
+        handler = dispatch.flow_handler(flow)
+        if handler is None:
+            await db.clear_flow(sender_id)
+            return
+        await handler(client, chat_id, sender_id, flow_row, value)
         return
 
     data = dict(flow_row["data"])

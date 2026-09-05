@@ -156,8 +156,9 @@ START = (
     "\n"
     "Turn a link, a note, a WiFi network, a contact or a calendar event into a "
     "scannable code, without leaving this chat. Every code is drawn at the "
-    "highest error correction level and carries the small uwu mark at its "
-    "centre, exactly as the portal does it.\n"
+    "highest error correction level and carries a small mark at its centre. It "
+    "says uwu to begin with, the same as the portal, and {watermark} makes it "
+    "say whatever you like.\n"
     "\n"
     "<b>Make a code</b>\n"
     "Send any text or link on its own, or use one of these.\n"
@@ -170,15 +171,21 @@ START = (
     "Send a photo of a QR code and it comes back as plain text. "
     "{decode} explains the details.\n"
     "\n"
+    "<b>Keeping codes</b>\n"
+    "Press Save under any code and it is kept. With an account connected it "
+    "goes straight there; without one it waits in this chat and moves across "
+    "the moment you connect, skipping anything already on the account.\n"
+    "{saved} lists whichever of the two you have\n"
+    "\n"
     "<b>Your account</b>\n"
     "{link} connects this chat to your portal account\n"
     "{unlink} disconnects it again\n"
     "{code} issues a code to type into the portal\n"
-    "{saved} lists the codes on your account\n"
     "{twofa} turns sign in approval on or off\n"
     "\n"
     "<b>Everything else</b>\n"
     "{settings} changes size, colour and error correction\n"
+    "{watermark} changes the mark in the middle\n"
     "{cancel} abandons whatever is half finished\n"
     "\n"
     "Run {start} at any time to see this list again."
@@ -186,7 +193,7 @@ START = (
 
 COMMAND_LIST = (
     "start", "qr", "wifi", "contact", "event", "decode", "link", "unlink",
-    "code", "saved", "twofa", "settings", "cancel",
+    "code", "saved", "twofa", "settings", "watermark", "cancel",
 )
 
 
@@ -207,9 +214,10 @@ COMMAND_DESCRIPTIONS = (
     ("link", "Connect this chat to your portal account"),
     ("code", "Get a six digit code for the portal"),
     ("unlink", "Disconnect this chat from your account"),
-    ("saved", "Browse the codes on your account"),
+    ("saved", "Browse the codes you have kept"),
     ("twofa", "Turn sign in approval on or off"),
     ("settings", "Size, colour and error correction"),
+    ("watermark", "Change the mark in the middle of your codes"),
     ("cancel", "Abandon whatever is half finished"),
 )
 

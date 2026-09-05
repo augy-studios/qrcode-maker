@@ -3,11 +3,14 @@
 The payload builders mirror getFormData() in the portal's script.js, so a WiFi
 code made here and one made on the site encode byte for byte the same string.
 The renderer mirrors updateQR(): error correction H by default, a two module
-quiet zone, and the small uwu mark boxed out at the centre.
+quiet zone, and a small mark boxed out at the centre. The portal always draws
+uwu there; here it is only the default, and /watermark swaps it per chat.
 
 The watermark punches a hole in the symbol. Level H tolerates roughly thirty
 percent damage, which is why the portal pins it there and why the settings
-command warns when you drop below it.
+command warns when you drop below it. A longer mark makes a bigger hole, so the
+text is length capped on the way in and the font shrinks rather than letting the
+box run past WATERMARK_MAX_WIDTH_RATIO of the image.
 
 The mark is drawn in Jua, the same face the portal loads from Google Fonts. A
 browser can fetch a webfont; a server cannot, so the file is committed under
@@ -34,8 +37,10 @@ from config import (
     FONT_CANDIDATES,
     WATERMARK_FONT,
     WATERMARK_FONT_RATIO,
+    WATERMARK_MAX_WIDTH_RATIO,
     WATERMARK_PAD_RATIO,
     WATERMARK_TEXT,
+    WATERMARK_TEXT_MAX,
 )
 
 log = logging.getLogger(__name__)
@@ -93,6 +98,36 @@ def watermark_font_name() -> str:
     if path == WATERMARK_FONT:
         return "Jua, matching the portal"
     return f"{path.name}, not Jua, so it will not match the portal"
+
+
+# -------------------------------------------------------- watermark text ---
+
+
+class WatermarkTextError(ValueError):
+    """The mark someone asked for cannot be drawn, in words they can read."""
+
+
+def clean_watermark_text(value: str) -> str:
+    """Normalise a mark, or explain why it will not do.
+
+    A mark is one short line drawn into a hole in the middle of the symbol, so
+    line breaks and runs of spaces have nowhere to go. They are folded into
+    single spaces rather than refused, because someone typing two spaces meant
+    one word gap, not an error message.
+    """
+    text = " ".join((value or "").split())
+    if not text:
+        raise WatermarkTextError(
+            "That came through empty. Send the text you want in the middle of "
+            "the code, or turn the mark off entirely in /settings."
+        )
+    if len(text) > WATERMARK_TEXT_MAX:
+        raise WatermarkTextError(
+            f"That is {len(text)} characters and the mark holds "
+            f"{WATERMARK_TEXT_MAX}. Anything longer covers so much of the "
+            "symbol that scanners start giving up on it."
+        )
+    return text
 
 
 # -------------------------------------------------------- payload builders --
@@ -276,7 +311,8 @@ def describe(data: str) -> str:
 
 def render(data: str, *, size: int = 600, margin: int = 2, ec: str = "H",
            fg: str = "#000000", bg: str = "#ffffff",
-           watermark: bool = True) -> bytes:
+           watermark: bool = True,
+           watermark_text: str = WATERMARK_TEXT) -> bytes:
     """Render a payload to PNG bytes."""
     if not data:
         raise ValueError("Nothing to encode.")
@@ -294,29 +330,42 @@ def render(data: str, *, size: int = 600, margin: int = 2, ec: str = "H",
     # Nearest neighbour keeps the module edges hard at any scale.
     image = image.resize((size, size), Image.NEAREST)
 
-    if watermark:
-        _draw_watermark(image, size, fg, bg)
+    text = " ".join((watermark_text or "").split())
+    if watermark and text:
+        _draw_watermark(image, size, fg, bg, text)
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
 
 
-def _draw_watermark(image: Image.Image, size: int, fg: str, bg: str) -> None:
+def _draw_watermark(image: Image.Image, size: int, fg: str, bg: str,
+                    text: str) -> None:
     draw = ImageDraw.Draw(image)
-    font_size = max(8, round(size * WATERMARK_FONT_RATIO))
-    font = _font(font_size)
     pad = max(2, round(size * WATERMARK_PAD_RATIO))
+    ceiling = size * WATERMARK_MAX_WIDTH_RATIO
 
     # The portal asks the browser for "bold Jua", and Jua only ships a Regular
     # weight, so what it actually gets is a synthesised bold. A thin stroke is
     # how the same thickening is done here.
-    stroke = max(1, round(font_size * 0.04)) if _resolve_font_path() else 0
+    bold = _resolve_font_path() is not None
 
-    left, top, right, bottom = draw.textbbox(
-        (0, 0), WATERMARK_TEXT, font=font, stroke_width=stroke
-    )
-    text_w, text_h = right - left, bottom - top
+    # "uwu" at the portal's ratio always fits, so the first pass is the portal's
+    # own geometry. A longer mark steps the size down until the box is back
+    # inside the ceiling, which trades a smaller mark for a code that still
+    # scans.
+    font_size = max(8, round(size * WATERMARK_FONT_RATIO))
+    while True:
+        font = _font(font_size)
+        stroke = max(1, round(font_size * 0.04)) if bold else 0
+        left, top, right, bottom = draw.textbbox(
+            (0, 0), text, font=font, stroke_width=stroke
+        )
+        text_w, text_h = right - left, bottom - top
+        if text_w + pad * 2 <= ceiling or font_size <= 8:
+            break
+        font_size -= 1
+
     box_w, box_h = text_w + pad * 2, font_size + pad * 2
     centre_x, centre_y = size / 2, size / 2
 
@@ -331,7 +380,7 @@ def _draw_watermark(image: Image.Image, size: int, fg: str, bg: str) -> None:
     )
     draw.text(
         (centre_x - left - text_w / 2, centre_y - top - text_h / 2),
-        WATERMARK_TEXT,
+        text,
         font=font,
         fill=fg,
         stroke_width=stroke,
@@ -348,6 +397,7 @@ def render_with_prefs(data: str, prefs: dict) -> bytes:
         fg=str(prefs.get("fg", "#000000")),
         bg=str(prefs.get("bg", "#ffffff")),
         watermark=bool(prefs.get("watermark", 1)),
+        watermark_text=str(prefs.get("watermark_text") or WATERMARK_TEXT),
     )
 
 

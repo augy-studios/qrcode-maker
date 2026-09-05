@@ -122,7 +122,10 @@ async function status(req, res, { userId }) {
 // --------------------------------------------------------------- deep link --
 
 async function deeplink(req, res, { userId }) {
-    // Only the newest invitation stays live.
+    // Only the newest invitation stays live, so a start link left open in an
+    // old tab cannot be walked into later. Superseding one is not the same as
+    // failing it: poll below answers from the account, so the tab holding the
+    // older code still sees the connection land.
     await supabase
         .from(TOKENS)
         .update({ status: 'expired' })
@@ -147,19 +150,44 @@ async function deeplink(req, res, { userId }) {
     });
 }
 
+/**
+ * Where a connect attempt has got to.
+ *
+ * The question the tab is really asking is whether the account is connected,
+ * not whether this particular invitation was the one that did it. The two come
+ * apart as soon as the account is open in more than one place: a second tab
+ * pressing Connect expires this code, and the tap that lands in Telegram then
+ * confirms the other one. Reporting that as a failure here would leave a tab
+ * saying the connection did not happen while the chat and every other session
+ * says it did, so a dead code is checked against the link before it is believed.
+ */
 async function poll(req, res, { userId }) {
     const { code } = req.body;
     if (!code) return err(res, 'Missing code');
 
     const { data } = await supabase
         .from(TOKENS)
-        .select('status, telegram_username')
+        .select('status, telegram_username, created_at')
         .eq('kind', 'deeplink')
         .eq('code', code)
         .eq('user_id', userId)
         .maybeSingle();
 
     if (!data) return ok(res, { status: 'gone' });
+    if (['pending', 'delivered'].includes(data.status)) {
+        return ok(res, { status: data.status, telegram_username: data.telegram_username });
+    }
+
+    // Only a link made since this invitation was issued can be the answer to
+    // it. An older one belongs to a connection this tab already knew about.
+    const link = await linkForUser(userId);
+    if (link?.telegram_id && new Date(link.linked_at) >= new Date(data.created_at)) {
+        return ok(res, {
+            status: 'confirmed',
+            telegram_username: link.telegram_username,
+        });
+    }
+
     return ok(res, { status: data.status, telegram_username: data.telegram_username });
 }
 

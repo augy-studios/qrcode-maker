@@ -88,7 +88,7 @@ async function updateQR() {
     ph.style.display = 'none';
     actions.style.display = 'flex';
     dataBox.style.display = 'block';
-    saveBtn.style.display = currentUser ? 'block' : 'none';
+    saveBtn.style.display = 'block';
 
     await QRCode.toCanvas(canvas, currentData, {
         width: 300,
@@ -166,22 +166,86 @@ document.querySelectorAll('.modal-tab').forEach(btn => {
     });
 });
 
+/* -- FAVOURITES KEPT ON THIS DEVICE -- */
+/*
+ * Saving has never needed an account, it only ever needed somewhere to put the
+ * result. Signed out, that somewhere is localStorage: the same Save button, the
+ * same list under My QRs, just held on this device and readable by nobody else.
+ *
+ * It is a waiting room, not a second home. The first time an account signs in
+ * here the whole pile is handed to the server, which keeps whatever the account
+ * does not already have and tells us so, and the device store is emptied. The
+ * bot does exactly this with its own local list when a chat links, and both
+ * sides decide sameness on the encoded payload, so a code saved in both places
+ * survives as one.
+ */
+const FAV_KEY = 'qr_favourites';
+const FAV_MAX = 50;
+
+function favLoad() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(FAV_KEY) || '[]');
+        return Array.isArray(raw) ? raw.filter((f) => f && f.data && f.image) : [];
+    } catch {
+        return [];
+    }
+}
+
+function favStore(list) {
+    try {
+        localStorage.setItem(FAV_KEY, JSON.stringify(list));
+        return true;
+    } catch {
+        // A full or blocked store is worth saying out loud, because the user
+        // just asked for something to be kept and it will not be.
+        return false;
+    }
+}
+
+/** Add one code. Returns 'added', 'duplicate', 'full' or 'failed'. */
+function favAdd(data, type, image) {
+    const list = favLoad();
+    if (list.some((f) => f.data === data)) return 'duplicate';
+    if (list.length >= FAV_MAX) return 'full';
+    list.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        data,
+        type,
+        image,
+        created: new Date().toISOString(),
+    });
+    return favStore(list) ? 'added' : 'failed';
+}
+
+function favRemove(id) {
+    favStore(favLoad().filter((f) => f.id !== id));
+}
+
+function favCount() {
+    return favLoad().length;
+}
+
 /* -- AUTH STATE -- */
 let currentUser = null;
 
 function setAuthBtn() {
     const btn = document.getElementById('authBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const deviceBtn = document.getElementById('deviceQrBtn');
     if (currentUser) {
         btn.innerHTML = '<span data-icon="folder"></span> My QRs';
         hydrateIcons(btn);
         logoutBtn.style.display = '';
-        document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
+        deviceBtn.style.display = 'none';
     } else {
         btn.innerHTML = 'Register / Login';
         logoutBtn.style.display = 'none';
-        document.getElementById('saveQrBtn').style.display = 'none';
+        // Nothing kept here yet means nothing to open, so the button stays away
+        // until the first save puts something behind it.
+        deviceBtn.style.display = favCount() ? '' : 'none';
     }
+    // Saving works either way now, so the button follows the code, not the user.
+    document.getElementById('saveQrBtn').style.display = currentData ? 'block' : 'none';
 }
 
 async function triggerPasswordSave(username, password) {
@@ -202,6 +266,14 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     }).catch(() => {});
     localStorage.removeItem('qr_session');
     currentUser = null;
+    // Only this session ends. Any other browser signed in to the account keeps
+    // its own session and its own Telegram connection, which is untouched by a
+    // log out here.
+    stopTgWatch();
+    stopTgConnectPoll();
+    tgLinkedSeen = null;
+    const panel = document.getElementById('tgPanel');
+    if (panel) panel.hidden = true;
     setAuthBtn();
     showToast('Logged out.');
 });
@@ -312,6 +384,9 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
         closeModal('authModal');
         setAuthBtn();
         showToast('Account created! Welcome, ' + username + '!');
+        // A new account is the commonest way a device arrives holding codes:
+        // saved first, registered afterwards. They go up with it.
+        mergeDeviceFavourites();
     } catch (e) {
         msg.className = 'auth-msg error';
         msg.textContent = e.message;
@@ -321,7 +396,9 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
 /* -- SESSION RESTORE -- */
 (async () => {
     const token = localStorage.getItem('qr_session');
-    if (!token) return;
+    // Signed out is still a state worth dressing: a device holding saved codes
+    // needs its My QRs button on the very first paint, not only after a save.
+    if (!token) return setAuthBtn();
     try {
         const res = await fetch('/api/auth', {
             method: 'POST',
@@ -340,14 +417,29 @@ document.getElementById('registerSubmit').addEventListener('click', async () => 
         const data = await res.json();
         currentUser = data.user;
         setAuthBtn();
+        // Anything a previous merge could not hand over is still sitting here.
+        mergeDeviceFavourites();
     } catch {}
 })();
 
 /* -- SAVE QR -- */
 document.getElementById('saveQrBtn').addEventListener('click', async () => {
-    if (!currentUser || !currentData) return;
+    if (!currentData) return;
     const canvas = document.getElementById('qrCanvas');
     const imageDataUrl = canvas.toDataURL('image/png');
+
+    if (!currentUser) {
+        const outcome = favAdd(currentData, activeTab, imageDataUrl);
+        if (outcome === 'duplicate') return showToast('Already in your saved codes.');
+        if (outcome === 'full') {
+            return showToast(`This device holds ${FAV_MAX} codes. Delete one first.`);
+        }
+        if (outcome === 'failed') {
+            return showToast('This browser would not let us save it. Check your storage settings.');
+        }
+        setAuthBtn();
+        return showToast('Saved on this device. Log in and it moves to your account.');
+    }
 
     try {
         const res = await fetch('/api/qr-save', {
@@ -368,8 +460,60 @@ document.getElementById('saveQrBtn').addEventListener('click', async () => {
 });
 
 /* -- MY QRs -- */
+document.getElementById('deviceQrBtn').addEventListener('click', () => {
+    loadMyQRs();
+    openModal('myQrModal');
+});
+
+function renderQrCards(grid, cards) {
+    grid.innerHTML = cards
+        .map(
+            (c) => `
+      <div class="qr-card" data-id="${escHtml(c.id)}">
+        <img src="${c.image}" alt="QR Code" loading="lazy" />
+        <div class="qr-card-label">${escHtml(c.label)}</div>
+        <div class="qr-card-actions">
+          <a href="${c.image}" download="qr-${escHtml(c.id)}.png" class="btn-ghost" aria-label="Download"><span data-icon="download"></span></a>
+          <button class="btn-ghost" onclick="deleteQR('${escHtml(c.id)}')" aria-label="Delete"><span data-icon="trash"></span></button>
+        </div>
+      </div>`
+        )
+        .join('');
+    hydrateIcons(grid);
+}
+
+function setMyQrNote(text) {
+    const note = document.getElementById('myQrNote');
+    note.textContent = text || '';
+    note.hidden = !text;
+}
+
 async function loadMyQRs() {
     const grid = document.getElementById('myQrGrid');
+
+    // Signed out, the list is whatever this device is holding.
+    if (!currentUser) {
+        const list = favLoad();
+        setMyQrNote(
+            'These are saved in this browser only. Log in or register and they ' +
+                'move to your account, joining anything already there, without ' +
+                'saving anything twice.'
+        );
+        if (!list.length) {
+            grid.innerHTML = '<p class="empty-state">No saved QR codes yet.</p>';
+            return;
+        }
+        renderQrCards(
+            grid,
+            list
+                .slice()
+                .reverse()
+                .map((f) => ({ id: f.id, image: f.image, label: f.data.slice(0, 80) }))
+        );
+        return;
+    }
+
+    setMyQrNote('');
     grid.innerHTML = '<p class="empty-state">Loading…</p>';
     const token = localStorage.getItem('qr_session');
     try {
@@ -379,22 +523,22 @@ async function loadMyQRs() {
             grid.innerHTML = '<p class="empty-state">No saved QR codes yet.</p>';
             return;
         }
-        grid.innerHTML = data.qrs.map(q => `
-      <div class="qr-card" data-id="${q.id}">
-        <img src="${q.image_url}" alt="QR Code" loading="lazy" />
-        <div class="qr-card-label">${escHtml(q.data_preview)}</div>
-        <div class="qr-card-actions">
-          <a href="${q.image_url}" download="qr-${q.id}.png" class="btn-ghost" aria-label="Download"><span data-icon="download"></span></a>
-          <button class="btn-ghost" onclick="deleteQR('${q.id}')" aria-label="Delete"><span data-icon="trash"></span></button>
-        </div>
-      </div>`).join('');
-        hydrateIcons(grid);
+        renderQrCards(
+            grid,
+            data.qrs.map((q) => ({ id: q.id, image: q.image_url, label: q.data_preview }))
+        );
     } catch {
         grid.innerHTML = '<p class="empty-state">Failed to load.</p>';
     }
 }
 
 window.deleteQR = async (id) => {
+    if (!currentUser) {
+        favRemove(id);
+        setAuthBtn();
+        loadMyQRs();
+        return;
+    }
     const token = localStorage.getItem('qr_session');
     await fetch('/api/qr-delete', {
         method: 'POST',
@@ -408,6 +552,59 @@ window.deleteQR = async (id) => {
     });
     loadMyQRs();
 };
+
+/* -- HANDING THE DEVICE LIST TO THE ACCOUNT -- */
+/*
+ * Runs once per sign in, on every route into an account: password, Telegram
+ * approval, backup code, and a fresh registration. The server does the
+ * de-duplication, because only it can see what the account already holds, and
+ * only what it confirms is dropped from this device.
+ */
+async function mergeDeviceFavourites() {
+    const list = favLoad();
+    if (!list.length) return;
+
+    let data;
+    try {
+        const res = await fetch('/api/qr-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token: localStorage.getItem('qr_session'),
+                action: 'merge',
+                items: list.map((f) => ({
+                    id: f.id,
+                    data: f.data,
+                    type: f.type,
+                    imageDataUrl: f.image,
+                })),
+            }),
+        });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Merge failed');
+    } catch {
+        // Keep every one of them. An account that could not be reached is a
+        // reason to try again later, never a reason to drop the only copy.
+        showToast('Your device codes are still here. We will move them next time.');
+        return;
+    }
+
+    // Anything the server named as failed stays put; the rest is now on the
+    // account and this device does not need a second copy.
+    const failed = new Set(data.failed || []);
+    favStore(list.filter((f) => failed.has(f.id)));
+
+    const moved = data.added || 0;
+    const skipped = data.skipped || 0;
+    if (moved) {
+        showToast(
+            `${moved} saved ${moved === 1 ? 'code' : 'codes'} moved to your account` +
+                (skipped ? `, ${skipped} already there.` : '.')
+        );
+    } else if (skipped) {
+        showToast('Your saved codes were already on your account.');
+    }
+}
 
 function escHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -448,6 +645,8 @@ function finishSignIn(user, token, username, password, note) {
     closeModal('authModal');
     setAuthBtn();
     showToast(note || 'Welcome back!');
+    // There is now somewhere to put whatever this device was holding.
+    mergeDeviceFavourites();
 }
 
 /* -- TWO FACTOR, VIA TELEGRAM -- */
@@ -644,22 +843,97 @@ function tgSay(text, isError) {
     msg.textContent = text;
 }
 
-async function tgRefresh() {
+/* -- ONE LINK, EVERY SESSION -- */
+/*
+ * The Telegram connection belongs to the account, not to the browser that made
+ * it. Log in on a laptop and a phone and both are connected, because both are
+ * the same account and the link is a row against the account id. Nothing here
+ * is limited to one session, and signing in somewhere new never disturbs a
+ * session that is already open.
+ *
+ * What does not travel by itself is the news. A panel opened before the link
+ * was made goes on saying so, and would offer Connect for an account that is
+ * already connected. This heartbeat is the fix: while the panel is on screen it
+ * re-reads the account every few seconds, so a connection, a disconnection or a
+ * sign in approval toggle made anywhere else shows up here without a reload.
+ *
+ * It stops itself the moment the panel closes, so a tab left open all day is
+ * not quietly polling all day.
+ */
+const TG_WATCH_MS = 8000;
+let tgWatch = null;
+let tgLinkedSeen = null; // what this tab last saw, so a change elsewhere is news
+
+function tgPanelOpen() {
+    const modal = document.getElementById('myQrModal');
+    return !!modal && !modal.classList.contains('hidden');
+}
+
+function stopTgWatch() {
+    if (tgWatch) {
+        clearInterval(tgWatch);
+        tgWatch = null;
+    }
+}
+
+function startTgWatch() {
+    stopTgWatch();
+    tgWatch = setInterval(() => {
+        if (!currentUser || !tgPanelOpen()) return stopTgWatch();
+        tgRefresh({ quiet: true });
+    }, TG_WATCH_MS);
+}
+
+/**
+ * Read the account's Telegram state and dress the panel with it.
+ *
+ * Quiet is the heartbeat calling. It leaves the panel alone on a failed read,
+ * because a dropped request says nothing about the link, and it never touches
+ * the backup codes half, because codes on screen are shown exactly once and a
+ * background tick must not be what wipes them.
+ */
+async function tgRefresh(options) {
+    const quiet = !!(options && options.quiet);
     const panel = document.getElementById('tgPanel');
     if (!panel || !currentUser) return;
     panel.hidden = false;
     const state = document.getElementById('tgState');
+
+    let linked;
+    let telegram;
     try {
-        const { linked, telegram } = await tgApi({ action: 'status' });
-        document.getElementById('tgConnected').hidden = !linked;
-        document.getElementById('tgDisconnected').hidden = linked;
-        state.textContent = linked
-            ? 'Connected' + (telegram.username ? ' to @' + telegram.username : '') + '.'
-            : 'Not connected yet.';
-        document.getElementById('tgTwofa').checked = !!(telegram && telegram.twofa);
-        if (linked) tgBackupRefresh();
+        ({ linked, telegram } = await tgApi({ action: 'status' }));
     } catch (e) {
-        state.textContent = e.message;
+        if (!quiet) state.textContent = e.message;
+        return;
+    }
+
+    document.getElementById('tgConnected').hidden = !linked;
+    document.getElementById('tgDisconnected').hidden = linked;
+    state.textContent = linked
+        ? 'Connected' + (telegram.username ? ' to @' + telegram.username : '') + '.'
+        : 'Not connected yet.';
+    document.getElementById('tgTwofa').checked = !!(telegram && telegram.twofa);
+
+    const changed = tgLinkedSeen !== null && tgLinkedSeen !== linked;
+    tgLinkedSeen = linked;
+
+    // Only the heartbeat announces. A change this tab made has already said so
+    // in its own words.
+    if (quiet && changed) {
+        stopTgConnectPoll();
+        tgSay('');
+        showToast(
+            linked
+                ? 'Telegram was connected from another session.'
+                : 'Telegram was disconnected from another session.'
+        );
+        if (linked) tgBackupRefresh();
+    }
+
+    if (!quiet) {
+        if (linked) tgBackupRefresh();
+        startTgWatch();
     }
 }
 

@@ -2,13 +2,20 @@
 
 This database holds state that belongs to the bot alone:
 
-    buttons   every inline button ever sent, so a button keeps working after a
-              restart instead of dying with the process memory
-    flows     guided builder progress, so a half finished WiFi code survives
-    prefs     per user rendering defaults
-    history   recent payloads, so the Save button knows what to re-render
-    rate      a small per user rate limit
-    seen      de-duplication keys for the Supabase token sweep
+    buttons    every inline button ever sent, so a button keeps working after a
+               restart instead of dying with the process memory
+    flows      guided builder progress, so a half finished WiFi code survives
+    prefs      per user rendering defaults
+    history    recent payloads, so the Save button knows what to re-render
+    favourites codes kept by a chat with no account yet, waiting for a link
+    rate       a small per user rate limit
+    seen       de-duplication keys for the Supabase token sweep
+
+Favourites are the one table here that is meant to empty itself. A chat with no
+portal account still gets a Save button, and what it saves waits here until the
+account arrives, at which point linking.py's caller moves the lot across and
+deletes it. Until then it is the only copy, so unlike history it is never pruned
+by age.
 
 Anything the portal also has to read lives in Supabase instead. See schema.sql.
 
@@ -23,7 +30,7 @@ import sqlite3
 import threading
 import time
 
-from config import DB_PATH, DEFAULT_PREFS, HISTORY_KEEP
+from config import DB_PATH, DEFAULT_PREFS, FAVOURITES_MAX, HISTORY_KEEP
 
 _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
@@ -58,14 +65,15 @@ CREATE TABLE IF NOT EXISTS flows (
 );
 
 CREATE TABLE IF NOT EXISTS prefs (
-    telegram_id INTEGER PRIMARY KEY,
-    size        INTEGER NOT NULL,
-    margin      INTEGER NOT NULL,
-    ec          TEXT    NOT NULL,
-    watermark   INTEGER NOT NULL,
-    fg          TEXT    NOT NULL,
-    bg          TEXT    NOT NULL,
-    updated_at  INTEGER NOT NULL
+    telegram_id    INTEGER PRIMARY KEY,
+    size           INTEGER NOT NULL,
+    margin         INTEGER NOT NULL,
+    ec             TEXT    NOT NULL,
+    watermark      INTEGER NOT NULL,
+    fg             TEXT    NOT NULL,
+    bg             TEXT    NOT NULL,
+    watermark_text TEXT    NOT NULL DEFAULT 'uwu',
+    updated_at     INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS history (
@@ -76,6 +84,19 @@ CREATE TABLE IF NOT EXISTS history (
     created_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS history_owner ON history (telegram_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS favourites (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL,
+    kind        TEXT    NOT NULL,
+    payload     TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS favourites_owner ON favourites (telegram_id, id DESC);
+-- The dedupe the merge relies on, enforced at the point of writing so a chat
+-- can never build up two rows the link would then have to reconcile.
+CREATE UNIQUE INDEX IF NOT EXISTS favourites_unique
+    ON favourites (telegram_id, payload);
 
 CREATE TABLE IF NOT EXISTS rate (
     telegram_id  INTEGER NOT NULL,
@@ -92,12 +113,28 @@ CREATE TABLE IF NOT EXISTS seen (
 """
 
 
+# Columns added to a table that already existed. CREATE TABLE IF NOT EXISTS
+# leaves an older database alone, so anything added after a release has to be
+# bolted on here. Each entry is (table, column, full column definition).
+ADDED_COLUMNS = (
+    ("prefs", "watermark_text", "TEXT NOT NULL DEFAULT 'uwu'"),
+)
+
+
+def _apply_added_columns(conn: sqlite3.Connection) -> None:
+    for table, column, definition in ADDED_COLUMNS:
+        present = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if present and column not in present:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def _connect() -> sqlite3.Connection:
     global _conn
     if _conn is None:
         _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         _conn.row_factory = sqlite3.Row
         _conn.executescript(SCHEMA)
+        _apply_added_columns(_conn)
         _conn.commit()
     return _conn
 
@@ -266,13 +303,15 @@ async def set_prefs(telegram_id: int, prefs: dict) -> None:
     await asyncio.to_thread(
         _write,
         "INSERT INTO prefs (telegram_id, size, margin, ec, watermark, fg, bg,"
-        " updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        " watermark_text, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(telegram_id) DO UPDATE SET"
         " size = excluded.size, margin = excluded.margin, ec = excluded.ec,"
         " watermark = excluded.watermark, fg = excluded.fg, bg = excluded.bg,"
+        " watermark_text = excluded.watermark_text,"
         " updated_at = excluded.updated_at",
         (telegram_id, merged["size"], merged["margin"], merged["ec"],
-         int(merged["watermark"]), merged["fg"], merged["bg"], _now()),
+         int(merged["watermark"]), merged["fg"], merged["bg"],
+         merged["watermark_text"], _now()),
     )
 
 
@@ -319,6 +358,84 @@ async def recent_history(telegram_id: int, limit: int = 10) -> list[dict]:
         (telegram_id, limit),
     )
     return [dict(r) for r in rows]
+
+
+# -------------------------------------------------------------- favourites --
+#
+# What a chat saved before it had anywhere to save it to. The unique index does
+# the de-duplication, so add_favourite can be called freely and simply reports
+# whether the row was new.
+
+
+class FavouritesFull(Exception):
+    """The chat is holding as many unlinked codes as it is allowed to."""
+
+
+def _add_favourite_sync(telegram_id, kind, payload) -> bool:
+    held = _read_one(
+        "SELECT COUNT(*) AS n FROM favourites WHERE telegram_id = ?", (telegram_id,)
+    )["n"]
+    if held >= FAVOURITES_MAX:
+        # Only after checking for a duplicate, which costs nothing and is not
+        # a new row, so a full list can still be pressed Save on harmlessly.
+        already = _read_one(
+            "SELECT id FROM favourites WHERE telegram_id = ? AND payload = ?",
+            (telegram_id, payload),
+        )
+        if already is None:
+            raise FavouritesFull()
+        return False
+    try:
+        _write(
+            "INSERT INTO favourites (telegram_id, kind, payload, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            (telegram_id, kind, payload, _now()),
+        )
+    except sqlite3.IntegrityError:
+        return False
+    return True
+
+
+async def add_favourite(telegram_id: int, kind: str, payload: str) -> bool:
+    """Keep a code locally. False means an identical one was already there."""
+    return await asyncio.to_thread(_add_favourite_sync, telegram_id, kind, payload)
+
+
+async def list_favourites(telegram_id: int) -> list[dict]:
+    """Everything the chat is holding, oldest first, which is merge order."""
+    rows = await asyncio.to_thread(
+        _read_all,
+        "SELECT * FROM favourites WHERE telegram_id = ? ORDER BY id ASC",
+        (telegram_id,),
+    )
+    return [dict(r) for r in rows]
+
+
+async def get_favourite(telegram_id: int, favourite_id: int) -> dict | None:
+    row = await asyncio.to_thread(
+        _read_one,
+        "SELECT * FROM favourites WHERE telegram_id = ? AND id = ?",
+        (telegram_id, favourite_id),
+    )
+    return dict(row) if row else None
+
+
+async def count_favourites(telegram_id: int) -> int:
+    row = await asyncio.to_thread(
+        _read_one,
+        "SELECT COUNT(*) AS n FROM favourites WHERE telegram_id = ?",
+        (telegram_id,),
+    )
+    return row["n"] if row else 0
+
+
+async def delete_favourite(telegram_id: int, favourite_id: int) -> bool:
+    cur = await asyncio.to_thread(
+        _write,
+        "DELETE FROM favourites WHERE telegram_id = ? AND id = ?",
+        (telegram_id, favourite_id),
+    )
+    return cur.rowcount > 0
 
 
 # -------------------------------------------------------------- rate limit --
@@ -369,7 +486,7 @@ def _mark_seen_sync(key) -> bool:
 
 
 def _counts_sync() -> dict:
-    tables = ("buttons", "flows", "prefs", "history", "rate", "seen")
+    tables = ("buttons", "flows", "prefs", "history", "favourites", "rate", "seen")
     counts = {
         name: _read_one(f"SELECT COUNT(*) AS n FROM {name}")["n"] for name in tables
     }

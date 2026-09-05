@@ -93,7 +93,7 @@ def register(client) -> None:
         if flow:
             await ui.reply_rich(
                 event,
-                f"Dropped the half finished {ui.esc(flow['flow'])} code. "
+                f"Dropped the half finished {ui.esc(dispatch.flow_label(flow['flow']))}. "
                 "Nothing was saved.",
             )
         else:
@@ -207,6 +207,7 @@ async def _health_report() -> str:
         f"Builders in progress, {counts['flows']}",
         f"People with saved settings, {counts['prefs']}",
         f"History rows, {counts['history']}",
+        f"Codes waiting on a link, {counts['favourites']}",
         f"Size on disk, {size_mb:.1f} MB",
     ]
 
@@ -490,6 +491,11 @@ async def _cb_link_confirm(event, button):
         "this chat guard your sign ins.",
         buttons=ui.keyboard(ui.row(ui.portal_button())),
     )
+
+    # Anything saved here while there was nowhere to put it now has somewhere.
+    from handlers_account import merge_favourites
+
+    await merge_favourites(event.client, sender.id, token["user_id"])
 
 
 @dispatch.on("link_cancel")

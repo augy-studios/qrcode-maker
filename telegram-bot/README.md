@@ -5,9 +5,9 @@ Telegram. It makes the same codes the portal makes, reads codes back out of
 images, and connects a Telegram account to a portal account so the two share
 one library of saved codes.
 
-Codes carry the same small `uwu` mark at the centre and are drawn at error
-correction H by default, which is what gives the mark room to sit there without
-breaking the scan.
+Codes carry the same small `uwu` mark at the centre, or whatever you set instead
+with `/watermark`, and are drawn at error correction H by default, which is what
+gives the mark room to sit there without breaking the scan.
 
 - [What it does](#what-it-does)
 - [Commands](#commands)
@@ -40,6 +40,17 @@ code appears as a result you can send without leaving the conversation.
 colour live in the bot's own database, per person, and apply everywhere
 including inline results.
 
+**Lets you write the mark.** The portal always stamps `uwu` through the middle
+of a code. Here that is only the starting point: `/watermark` swaps it for up to
+twelve characters of your own, and the mark shrinks itself rather than eating
+into the symbol.
+
+**Saves codes with or without an account.** Press Save under any code and it is
+kept. Connected, it goes to your portal account. Not connected, it waits in the
+chat's own list, and the first `/link` moves the whole lot across, skipping
+anything the account already holds. Saving early never costs you a duplicate and
+never costs you the code.
+
 **Talks to your portal account.** Once connected, codes made here can be pushed
 to your account with one tap, everything already saved is browsable from the
 chat, and the chat can act as the second factor when you sign in to the portal.
@@ -62,9 +73,10 @@ nothing. Scroll back to a message from weeks ago and its buttons still respond.
 | `/link` | Connects this chat to your portal account |
 | `/code` | Hands you six digits to type into the portal |
 | `/unlink` | Disconnects the chat again |
-| `/saved` | Browses the codes on your account, five at a time |
+| `/saved` | Browses the codes on your account, five at a time, or the ones waiting in this chat if there is no account yet |
 | `/twofa` | Turns sign in approval on or off |
 | `/settings` | Size, quiet zone, error correction, watermark, colours |
+| `/watermark <text>` | Changes what the mark in the middle says. Ask without the text and it prompts |
 | `/cancel` | Abandons a half finished builder |
 
 You can skip `/qr` entirely and send the text on its own. Sending a photo is
@@ -112,6 +124,13 @@ scanner, so a bare visit shows the page and only the button press acts.
 
 Tokens are short lived and single use. Deep links and pull codes last ten
 minutes, sign in challenges last five.
+
+One chat connects to one portal account, but that account can be signed in
+anywhere. The link is held against the account, so every browser signed in to it
+is connected at once, and a sign in from any of them is held back and delivered
+here. Two devices signing in at the same moment each get their own prompt, their
+own digits and their own approval button; answering one has no bearing on the
+other.
 
 **Backup codes, when this chat cannot answer.** Approval is only as reachable
 as one Telegram account, so the portal can hand out ten single use codes under
@@ -282,7 +301,7 @@ reports which one. Restore the file from the repository.
 bot.py                entry point, callback routing, start up and shut down
 config.py             environment, constants, paths
 db.py                 SQLite, the bot's own state
-dispatch.py           button kind registry, command patterns, the private gate
+dispatch.py           button and text flow registries, command patterns, the private gate
 runtime.py            live process state, read by the health command
 ui.py                 send_rich and friends, plus every shared string
 supa.py               async Supabase client over PostgREST and storage
@@ -290,7 +309,7 @@ qrgen.py              payload builders, renderer, watermark, detection
 linking.py            the four link flows and the token sweep
 handlers_core.py      start, help, link, unlink, code, twofa, cancel, health
 handlers_qr.py        generating, the guided builders, decoding, inline mode
-handlers_account.py   saved codes and settings
+handlers_account.py   saved codes, the favourites merge, settings, the mark
 run.sh                tmux wrapper
 requirements.txt      pinned to the Telethon 1.x line
 .env.example          every variable, documented

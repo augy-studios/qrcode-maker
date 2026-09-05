@@ -103,6 +103,27 @@ FONT_CANDIDATES = (
     Path("C:/Windows/Fonts/arialbd.ttf"),
 )
 
+# ------------------------------------------------------------- Watermark ---
+# Geometry taken from script.js on the portal. The text is only the starting
+# point: /watermark swaps it for anything else, per chat, and the mark grows
+# and shrinks around whatever it is told to draw.
+
+WATERMARK_TEXT = "uwu"
+WATERMARK_FONT_RATIO = 0.092
+WATERMARK_PAD_RATIO = 0.028
+
+# A longer mark punches a bigger hole. Twelve characters is the point past
+# which even level H starts losing codes, so that is where the door closes.
+WATERMARK_TEXT_MAX = 12
+
+# Past this the mark is still allowed, but the settings screen says out loud
+# that it is eating into the symbol.
+WATERMARK_TEXT_ROOMY = 6
+
+# The mark never covers more than this fraction of the width. Anything longer
+# is drawn smaller rather than being allowed to swallow the code.
+WATERMARK_MAX_WIDTH_RATIO = 0.45
+
 # ------------------------------------------------------------ QR defaults ---
 # These mirror the portal: 300 px at the smallest step, margin 2, error
 # correction H, black on white, watermarked.
@@ -114,6 +135,7 @@ DEFAULT_PREFS = {
     "watermark": 1,
     "fg": "#000000",
     "bg": "#ffffff",
+    "watermark_text": WATERMARK_TEXT,
 }
 
 SIZE_STEPS = (300, 600, 900, 1200)
@@ -129,14 +151,14 @@ COLOUR_PRESETS = (
     ("Rose", "#5c1a33", "#ffe6ef"),
 )
 
-# Watermark geometry, taken from script.js on the portal.
-WATERMARK_TEXT = "uwu"
-WATERMARK_FONT_RATIO = 0.092
-WATERMARK_PAD_RATIO = 0.028
-
 MAX_PAYLOAD_CHARS = 2000
 SAVED_PAGE_SIZE = 5
 HISTORY_KEEP = 40
+
+# Codes an unconnected chat may hold on to while it waits for an account. They
+# all move across on the first link, so this is a hoarding limit rather than a
+# feature limit.
+FAVOURITES_MAX = 50
 
 # ------------------------------------------------------------------ Limits --
 

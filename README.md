@@ -8,7 +8,8 @@ name. Live at **[qr.uwuapps.org](https://qr.uwuapps.org)**.
 
 Every code it makes carries a small `uwu` mark at its centre, drawn in Jua and
 backed by the highest error correction level, so the mark sits in the middle of
-the symbol without stopping it from scanning.
+the symbol without stopping it from scanning. In the bot the mark is yours to
+write: `/watermark` puts up to twelve characters of your own there instead.
 
 ## What is in here
 
@@ -51,7 +52,10 @@ Everything the site does, in a chat, plus the things a chat is better at.
 - **Inline mode**, so a code can be generated inside any conversation without
   the bot being in it.
 - **Your saved codes**, browsable and deletable from the chat once the account
-  is connected, and new ones pushed straight to it.
+  is connected, and new ones pushed straight to it. Saving works before the
+  account does: codes kept by an unconnected chat move onto it at the first
+  link.
+- **Your own mark** in the middle of every code, in place of `uwu`.
 - **Sign in approval.** With it turned on, a correct password is not enough to
   get into the portal. The attempt is held until you allow it in Telegram,
   either by typing six digits or by tapping through an approval page.
@@ -82,6 +86,24 @@ are standing on when you start.
 
 Every token is single use and short lived, wrong codes are counted, and a
 password is never typed into a chat on any of these routes.
+
+**One link, every session.** The connection is a row against the portal
+account, not against the browser that made it, so it covers every session that
+account has open. Sign in on a laptop and a phone and both are connected, both
+can push codes to the account, and both are guarded by sign in approval. Logging
+out of one leaves the others alone, and each held back sign in gets its own
+challenge, so two devices signing in at the same moment never collide.
+
+A panel already on screen when the link changes elsewhere catches up on its own
+within a few seconds, rather than going on offering Connect for an account that
+is already connected.
+
+**Saving before the join.** Neither side makes you wait for an account. A
+signed out browser keeps its codes in local storage, an unconnected chat keeps
+its own in the bot's database, and both hand the pile over the first time an
+account arrives. The receiving side skips anything it already holds, deciding
+sameness on the encoded payload, which both halves build identically. Save
+early, connect later, and end up with one list and no duplicates.
 
 **When the chat is gone.** Sign in approval leans on one account being
 reachable, so an account with it turned on can hold ten backup codes. Asking

@@ -9,6 +9,8 @@ A fast, browser-based QR code generator with no installs required.
 - **Instant preview** — QR codes update live as you type
 - **Download** — save any QR code as a PNG
 - **Save & manage** — log in to save QR codes to your account and access them any time from the My QRs panel
+- **Save before you sign up** — saving works signed out too, keeping codes in this browser under My QRs. The first sign in on that device moves them onto the account, skipping anything it already has, so nothing is stored twice and nothing is lost
+- **Works on every device you are signed in on** — a Telegram connection belongs to the account, so every open session shares it. Connect or disconnect on one and the others notice within a few seconds; logging out of one leaves the rest signed in
 - **Themes** — seven colour themes to personalise the interface
 - **PWA** — installable as a Progressive Web App on mobile and desktop
 

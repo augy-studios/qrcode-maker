@@ -80,6 +80,12 @@
                 <button class="icon-btn" id="themeBtn" type="button" aria-label="Theme">
                     <span data-icon="sun"></span>
                 </button>
+                <!-- Only for signed out visitors holding codes saved on this
+                     device. Signed in, authBtn becomes My QRs itself. -->
+                <button class="btn-ghost" id="deviceQrBtn" style="display:none">
+                    <span data-icon="folder"></span>
+                    My QRs
+                </button>
                 <button class="btn-primary" id="authBtn">Register / Login</button>
                 <a class="btn-ghost" id="coffeeBtn" href="https://donate.stripe.com/28o2akeAr3hv0DK6oo" target="_blank" rel="noopener" style="text-decoration:none">
                     <span data-icon="coffee"></span>
@@ -315,6 +321,7 @@
                 <span data-icon="close"></span>
             </button>
             <h2 class="modal-title" id="myQrTitle">My QR Codes</h2>
+            <p class="tg-hint" id="myQrNote" hidden></p>
             <div id="myQrGrid" class="qr-grid">
                 <p class="empty-state">No saved QR codes yet.</p>
             </div>

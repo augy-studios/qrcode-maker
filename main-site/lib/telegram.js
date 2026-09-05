@@ -27,11 +27,15 @@ export function requestMeta(req) {
 export async function linkForUser(userId) {
     const { data } = await supabase
         .from(LINKS)
-        .select('user_id, telegram_id, telegram_username, twofa_enabled')
+        .select('user_id, telegram_id, telegram_username, twofa_enabled, linked_at')
         .eq('user_id', userId)
         .maybeSingle();
     return data || null;
 }
+
+/** A unique violation, which for these inserts always means the code collided. */
+const isDuplicate = (error) =>
+    error?.code === '23505' || /duplicate key/i.test(error?.message || '');
 
 /**
  * Hold a password login back and ask the linked Telegram account to allow it.
@@ -39,28 +43,37 @@ export async function linkForUser(userId) {
  * The session token is minted here but deliberately not written to qr_sessions.
  * It only becomes a real session once the user approves, either by typing the
  * six digits or by tapping the button in Telegram.
+ *
+ * One challenge per sign in, never one per account: two browsers signing in at
+ * the same moment each get their own, each with its own digits and its own
+ * pre minted session, and approving one has no bearing on the other. The only
+ * thing they share is the live code index, which is unique across every open
+ * challenge, so a collision is possible and is retried here rather than being
+ * reported to the second browser as a failure. The bot does the same when it
+ * mints a pull code.
  */
 export async function startTwofaChallenge(userId, telegramId, meta) {
-    const row = {
-        kind: 'push_otp',
-        code: digits(6),
-        status: 'pending',
-        user_id: userId,
-        telegram_id: telegramId,
-        session_token: randomHex(32),
-        approval_secret: randomHex(24),
-        meta: meta || {},
-        expires_at: iso(PUSH_TTL_MS),
-    };
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const { data, error } = await supabase
+            .from(TOKENS)
+            .insert({
+                kind: 'push_otp',
+                code: digits(6),
+                status: 'pending',
+                user_id: userId,
+                telegram_id: telegramId,
+                session_token: randomHex(32),
+                approval_secret: randomHex(24),
+                meta: meta || {},
+                expires_at: iso(PUSH_TTL_MS),
+            })
+            .select('id, expires_at')
+            .single();
 
-    const { data, error } = await supabase
-        .from(TOKENS)
-        .insert(row)
-        .select('id, expires_at')
-        .single();
-
-    if (error) throw new Error('Could not start the sign in check.');
-    return data;
+        if (!error) return data;
+        if (!isDuplicate(error)) break;
+    }
+    throw new Error('Could not start the sign in check.');
 }
 
 /**

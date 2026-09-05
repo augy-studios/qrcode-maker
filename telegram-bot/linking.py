@@ -520,6 +520,12 @@ async def _announce_one(client, token: dict) -> None:
             "the portal login as well.",
             buttons=ui.keyboard(ui.row(ui.portal_button())),
         )
+        # The portal wrote this link, so this is the first the chat has heard of
+        # it and the first chance to hand over what it was holding.
+        if token.get("user_id"):
+            from handlers_account import merge_favourites
+
+            await merge_favourites(client, token["telegram_id"], token["user_id"])
         return
 
     # A backup code finished this one, which means the chat was never part of

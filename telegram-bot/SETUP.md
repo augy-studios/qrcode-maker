@@ -66,7 +66,7 @@ Turn a link, a note, a WiFi network, a contact or a calendar event into a scanna
 
 Connect your QR Maker account to browse everything you have saved, push new codes straight to it, and approve portal sign ins from here.
 
-Every code is drawn at the highest error correction level and carries the uwu mark at its centre, exactly as the website does it.
+Every code is drawn at the highest error correction level and carries the uwu mark at its centre, exactly as the website does it. /watermark makes the mark say something else.
 ```
 
 ### `/setuserpic`
@@ -93,9 +93,10 @@ decode - Read a QR code out of an image
 link - Connect this chat to your portal account
 code - Get a six digit code for the portal
 unlink - Disconnect this chat from your account
-saved - Browse the codes on your account
+saved - Browse the codes you have kept
 twofa - Turn sign in approval on or off
 settings - Size, colour and error correction
+watermark - Change the mark in the middle of your codes
 cancel - Abandon whatever is half finished
 ```
 
@@ -311,8 +312,18 @@ of seconds.
 **Pull code.** Disconnect, send `/code`, and type the digits into the portal
 panel. The bot should confirm in the chat without being asked.
 
-**Saving.** Generate something, press Save to my account, then check both
+**Saving, connected.** Generate something, press Save, then check both
 `/saved` and My QRs on the portal.
+
+**Saving, not connected.** Send `/unlink`, generate two codes and press Save on
+both. `/saved` should list them as waiting in the chat. Now `/link` the account
+again: the codes should move across on their own, and anything the account
+already had a copy of should be reported as skipped rather than saved twice.
+Save one of them on the portal first if you want to see that half work.
+
+**The mark.** Send `/watermark`, type a word, and check the sample that comes
+back. Scan it before trusting a long one. `/settings` should show the new mark,
+and `/watermark uwu` should put it back.
 
 **Sign in approval, typed.** Turn `/twofa` on, sign out of the portal, sign
 back in. The prompt should arrive unprompted within a few seconds, and the six
