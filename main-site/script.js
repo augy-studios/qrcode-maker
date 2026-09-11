@@ -138,6 +138,161 @@ document.getElementById('clearBtn').addEventListener('click', () => {
     updateQR();
 });
 
+/* -- OPENED FROM A LINK -- */
+/*
+ * The bot's Open buttons point here with the saved code in the fragment:
+ * /#qr=<base64url of {"t": type, "d": data}>. The fragment never reaches the
+ * server and needs no session, so a code saved on the account opens in the
+ * editor on any device, with the right tab picked and every field filled from
+ * the payload. From there it is an ordinary code: edit it, download it, save
+ * it again.
+ *
+ * The parsers below are the builders in getFormData run backwards. They take
+ * what the bot writes as well as what this page writes, which differ only in
+ * the optional bits (TEL;TYPE=CELL against TEL, seconds on a timestamp).
+ */
+function readOpenLink() {
+    const hash = location.hash.replace(/^#/, '');
+    if (!hash) return null;
+    const params = new URLSearchParams(hash);
+    const token = params.get('qr');
+    if (!token) return null;
+    try {
+        const b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const parsed = JSON.parse(new TextDecoder().decode(bytes));
+        if (!parsed || typeof parsed.d !== 'string' || !parsed.d) return null;
+        return { type: parsed.t, data: parsed.d };
+    } catch {
+        return null;
+    }
+}
+
+function detectType(data) {
+    const head = data.trimStart().slice(0, 32).toUpperCase();
+    if (head.startsWith('WIFI:')) return 'wifi';
+    if (head.startsWith('BEGIN:VCARD')) return 'contact';
+    if (head.startsWith('BEGIN:VCALENDAR') || head.startsWith('BEGIN:VEVENT')) return 'calendar';
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(data.trim())) return 'url';
+    return 'text';
+}
+
+/** Split "WIFI:T:WPA;S:name;P:pass;H:false;;" on the semicolons that are not escaped. */
+function parseWifi(data) {
+    const fields = {};
+    let key = '';
+    let value = '';
+    let inValue = false;
+    const body = data.trim().replace(/^WIFI:/i, '');
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (inValue && ch === '\\' && i + 1 < body.length) {
+            value += body[++i];
+        } else if (!inValue && ch === ':') {
+            inValue = true;
+        } else if (inValue && ch === ';') {
+            fields[key.toUpperCase()] = value;
+            key = '';
+            value = '';
+            inValue = false;
+        } else if (inValue) {
+            value += ch;
+        } else {
+            key += ch;
+        }
+    }
+    return fields;
+}
+
+/** Break vCard and iCalendar text into {NAME: value}, dropping parameters and unescaping. */
+function parseProperties(data) {
+    const props = {};
+    const unfolded = data.replace(/\r?\n[ \t]/g, '');
+    unfolded.split(/\r?\n/).forEach((line) => {
+        const at = line.indexOf(':');
+        if (at < 1) return;
+        const name = line.slice(0, at).split(';')[0].toUpperCase();
+        const value = line
+            .slice(at + 1)
+            .replace(/\\n/gi, '\n')
+            .replace(/\\([\\;,])/g, '$1');
+        if (!(name in props)) props[name] = value;
+    });
+    return props;
+}
+
+/** "20260912T143000" or "20260912T1430" to what a datetime-local input takes. */
+function fromIcal(stamp) {
+    const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/.exec((stamp || '').trim());
+    return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}` : '';
+}
+
+function fillForm(type, data) {
+    const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value || '';
+    };
+    switch (type) {
+        case 'url':
+            set('urlInput', data);
+            break;
+        case 'wifi': {
+            const w = parseWifi(data);
+            set('wssid', w.S);
+            set('wpass', w.P);
+            const sec = document.getElementById('wsec');
+            const known = Array.from(sec.options).some((o) => o.value === w.T);
+            sec.value = known ? w.T : 'WPA';
+            document.getElementById('whidden').checked = (w.H || '').toLowerCase() === 'true';
+            break;
+        }
+        case 'contact': {
+            const p = parseProperties(data);
+            // N carries the halves in order; FN is the fallback when it is missing.
+            const parts = (p.N || '').split(';');
+            let last = parts[0] || '';
+            let first = parts[1] || '';
+            if (!first && !last && p.FN) {
+                const words = p.FN.trim().split(/\s+/);
+                first = words.shift() || '';
+                last = words.join(' ');
+            }
+            set('cfn', first);
+            set('cln', last);
+            set('cph', p.TEL);
+            set('cem', p.EMAIL);
+            set('corg', p.ORG);
+            set('curl', p.URL);
+            break;
+        }
+        case 'calendar': {
+            const p = parseProperties(data);
+            set('evtitle', p.SUMMARY);
+            set('evstart', fromIcal(p.DTSTART));
+            set('evend', fromIcal(p.DTEND));
+            set('evloc', p.LOCATION);
+            set('evdesc', p.DESCRIPTION);
+            break;
+        }
+        default:
+            set('textInput', data);
+    }
+}
+
+(function openFromLink() {
+    const opened = readOpenLink();
+    if (!opened) return;
+    const known = ['url', 'text', 'wifi', 'contact', 'calendar'];
+    const type = known.includes(opened.type) ? opened.type : detectType(opened.data);
+    fillForm(type, opened.data);
+    // The tab click redraws the code from the fields just filled.
+    document.querySelector(`.tab[data-tab="${type}"]`).click();
+    // One open is one open. Leaving the fragment in place would put the saved
+    // version back on every reload, over whatever had been changed since.
+    history.replaceState(null, '', location.pathname + location.search);
+    showToast('Opened your saved code.');
+})();
+
 /* -- DOWNLOAD -- */
 document.getElementById('downloadBtn').addEventListener('click', () => {
     const canvas = document.getElementById('qrCanvas');

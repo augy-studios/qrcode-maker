@@ -6,7 +6,9 @@ are HTML, previews are off unless a link is the point of the message, and any
 value that came from a user is escaped on the way in.
 """
 
+import base64
 import html
+import json
 import logging
 
 from telethon import Button
@@ -133,6 +135,28 @@ def url_button(text: str, url: str):
 
 def portal_button(text: str = "Open the portal"):
     return Button.url(text, WEBAPP_URL)
+
+
+def portal_open_url(kind: str, data: str) -> str:
+    """A link that opens the portal with this code already filled in.
+
+    The payload rides in the fragment, so it never reaches the server and
+    needs no session: the page reads it, picks the matching tab and fills the
+    fields, and from there the code can be edited, re-saved or downloaded like
+    one made on the spot. base64url keeps every byte of the payload intact
+    through Telegram and the browser, and a QR can hold at most a few KB, so
+    the link never grows beyond what either will carry.
+    """
+    packed = json.dumps({"t": kind or "", "d": data}, ensure_ascii=False)
+    token = base64.urlsafe_b64encode(packed.encode()).decode().rstrip("=")
+    return f"{WEBAPP_URL}/#qr={token}"
+
+
+def open_button(text: str, kind: str, data: str, fallback_url: str | None = None):
+    """Open a saved code in the portal's editor, or the bare image without data."""
+    if data:
+        return Button.url(text, portal_open_url(kind, data))
+    return Button.url(text, fallback_url) if fallback_url else None
 
 
 def donate_button(text: str = "Support the project"):
