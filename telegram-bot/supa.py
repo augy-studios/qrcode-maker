@@ -8,6 +8,7 @@ Authentication is the service role key, so row level security is bypassed. Only
 ever pass values that came from a trusted place into a filter.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -76,19 +77,49 @@ def in_days_iso(days: int) -> str:
     return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
 
 
+# Requests that can be sent twice without changing the outcome. A PATCH or a
+# DELETE names its rows in the filter, so repeating one after a timeout does
+# the same thing again. A POST does not: the insert may have landed just before
+# the reply was lost, and a second one would make a second row.
+_REPEATABLE = frozenset({"GET", "HEAD", "PATCH", "DELETE"})
+
+
+def _describe(exc: BaseException) -> str:
+    # httpx's timeout errors carry no message, which leaves the log ending in
+    # nothing. The class name says what happened.
+    return str(exc) or type(exc).__name__
+
+
 async def _rest(method: str, table: str, **kwargs) -> list[dict]:
     prefer = kwargs.pop("prefer", "return=representation")
     headers = {"Content-Type": "application/json"}
     if prefer:
         headers["Prefer"] = prefer
 
-    try:
-        response = await _http().request(
-            method, f"/rest/v1/{table}", headers=headers, **kwargs
-        )
-    except httpx.HTTPError as exc:
-        runtime.note_supabase_error(f"{method} {table}: {exc}")
-        raise SupabaseError(f"{method} {table} could not be reached: {exc}") from exc
+    attempts = 2 if method in _REPEATABLE else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            response = await _http().request(
+                method, f"/rest/v1/{table}", headers=headers, **kwargs
+            )
+            break
+        except httpx.TransportError as exc:
+            # The network, not the database: a stalled read, a dropped
+            # connection, a DNS blip. One quick retry covers the usual case
+            # of a single lost packet without masking a real outage.
+            if attempt < attempts:
+                log.debug("%s %s: %s, retrying once.", method, table, _describe(exc))
+                await asyncio.sleep(0.5)
+                continue
+            runtime.note_supabase_error(f"{method} {table}: {_describe(exc)}")
+            raise SupabaseError(
+                f"{method} {table} could not be reached: {_describe(exc)}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            runtime.note_supabase_error(f"{method} {table}: {_describe(exc)}")
+            raise SupabaseError(
+                f"{method} {table} could not be reached: {_describe(exc)}"
+            ) from exc
 
     if response.status_code >= 400:
         detail = f"{method} {table} returned {response.status_code}: {response.text[:400]}"

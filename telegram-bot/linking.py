@@ -229,13 +229,27 @@ async def activate_session(token: dict) -> None:
 # enough that the sweep costs almost nothing.
 
 
+SWEEP_BACKOFF_MAX = 60  # seconds, the longest wait while the portal is down
+
+
 async def poll_forever(client) -> None:
     log.info("Token sweep running every %s seconds.", POLL_INTERVAL)
+    wait = POLL_INTERVAL
     while True:
         try:
             await _sweep(client)
+            wait = POLL_INTERVAL
         except asyncio.CancelledError:
             raise
+        except supa.SupabaseError as exc:
+            # The portal did not answer, which happens now and then on any
+            # connection and for minutes at a time during an outage. Neither
+            # is a bug in the sweep, so one line says so, and the next try
+            # waits a little longer each time until the portal is back.
+            log.warning("Token sweep skipped, %s. Next try in %ss.", exc, wait)
+            await asyncio.sleep(wait)
+            wait = min(wait * 2, SWEEP_BACKOFF_MAX)
+            continue
         except Exception:  # noqa: BLE001 - a bad sweep must not stop the bot
             log.exception("Token sweep failed, carrying on.")
         await asyncio.sleep(POLL_INTERVAL)
