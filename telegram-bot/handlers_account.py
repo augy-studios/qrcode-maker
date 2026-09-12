@@ -20,8 +20,10 @@ import db
 import dispatch
 import linking
 import qrgen
+import reply
 import supa
 import ui
+from reply import escape_md
 from config import (
     COLOUR_PRESETS,
     EC_STEPS,
@@ -79,35 +81,43 @@ def register(client) -> None:
 
 
 # ------------------------------------------------------------ saved codes ---
+#
+# One rich message, two ways of drawing it. The text mode is the numbered list;
+# the image mode is the same list with each code's picture under its number,
+# which Rich Markdown allows as a media block of its own. Send these as images
+# therefore edits the message in place rather than sending anything, and the
+# mode rides in every button's payload so paging and deleting keep it.
 
 
 SAVED_COLUMNS = "id,type,data_preview,qr_data,image_url,created_at"
 
 
-def _point_text(number: int, row: dict) -> str:
-    """One numbered entry, the same whether it sits in the list or under an image."""
+def _point_markdown(number: int, row: dict, with_image: bool) -> str:
+    """One numbered entry, with its picture underneath in image mode."""
     label = qrgen.KIND_LABELS.get(row.get("type") or "", "Code")
     preview = (row.get("data_preview") or "").strip() or "no preview"
     stamp = (row.get("created_at") or "")[:10]
-    return (
-        f"<b>{number}.</b> {ui.esc(label)}, saved {ui.esc(stamp)}\n"
-        f"    {ui.esc(preview[:70])}"
+    text = (
+        f"**{number}.** {escape_md(label)}, saved {escape_md(stamp)}\n"
+        f"{escape_md(preview[:70])}"
     )
+    if with_image and row.get("image_url"):
+        text += f"\n\n![{number}]({row['image_url']})"
+    return text
 
 
 async def _point_buttons(number: int, row: dict, page: int, sender_id: int,
-                         as_image: bool = False) -> list:
+                         images: bool) -> list:
     """Open and Delete for one entry. Open lands in the portal's editor with
-    the code filled in; Delete remembers whether it was pressed under the list
-    or under a photo, because the two have to be redrawn differently."""
-    payload = {"id": row["id"], "page": page, "n": number}
-    if as_image:
-        payload["img"] = True
+    the code filled in."""
     return ui.row(
         ui.open_button(f"Open {number}", row.get("type") or "",
                        row.get("qr_data") or "", row.get("image_url")),
-        await ui.inline_button(f"Delete {number}", "saved_delete_ask", payload,
-                               owner_id=sender_id),
+        await ui.inline_button(
+            f"Delete {number}", "saved_delete_ask",
+            {"id": row["id"], "page": page, "n": number, "images": images},
+            owner_id=sender_id,
+        ),
     )
 
 
@@ -122,11 +132,100 @@ async def _page_rows(user_id: str, page: int) -> list[dict]:
     )
 
 
+def _waiting_note(waiting: int) -> str:
+    if not waiting:
+        return ""
+    return (
+        f"{waiting} {'code' if waiting == 1 else 'codes'} saved in this "
+        "chat never made it onto your account. They are still here."
+    )
+
+
+async def _page_footer(page: int, pages: int, sender_id: int, waiting: int,
+                       images: bool, any_rows: bool) -> list:
+    """The rows under the entries: paging, the image toggle, the portal, and
+    the retry for anything a link left behind."""
+    rows = []
+    nav = []
+    if page > 0:
+        nav.append(await ui.inline_button(
+            "Previous", "saved_page", {"page": page - 1, "images": images},
+            owner_id=sender_id))
+    if page + 1 < pages:
+        nav.append(await ui.inline_button(
+            "Next", "saved_page", {"page": page + 1, "images": images},
+            owner_id=sender_id))
+    if nav:
+        rows.append(nav)
+
+    toggle = None
+    if any_rows:
+        toggle = await ui.inline_button(
+            "Just the list" if images else "Send these as images",
+            "saved_page", {"page": page, "images": not images},
+            owner_id=sender_id,
+        )
+    rows.append(ui.row(toggle, ui.portal_button("On the web")))
+
+    if waiting:
+        rows.append(ui.row(
+            await ui.inline_button(
+                f"Move {waiting} waiting {'code' if waiting == 1 else 'codes'} across",
+                "fav_merge", {"page": page, "images": images}, owner_id=sender_id),
+        ))
+    return rows
+
+
+async def build_saved_page(sender_id: int, user_id: str, page: int,
+                           images: bool = False):
+    """The saved list as (rich, buttons). Raises SupabaseError if the portal
+    is out, so the caller can say so.
+
+    Text mode and image mode are the same page; only the entries differ.
+    """
+    total = await supa.count(TABLE_CODES, {"user_id": f"eq.{user_id}"})
+    rows = await _page_rows(user_id, page)
+
+    # Normally empty: the merge runs at link time and clears it. Anything still
+    # here is a code the portal would not take, so the way to retry has to be
+    # somewhere the owner will actually look.
+    waiting = await db.count_favourites(sender_id)
+
+    if total == 0 and not waiting:
+        return ui.rich(
+            "# Nothing saved yet\n"
+            "\n"
+            "Generate a code here and press Save, or save one from the portal. "
+            "They all land in the same place."
+        ), ui.keyboard(ui.row(ui.portal_button()))
+
+    pages = max(1, -(-total // SAVED_PAGE_SIZE))
+    page = max(0, min(page, pages - 1))
+    first = page * SAVED_PAGE_SIZE
+
+    parts = [
+        "# Your saved codes\n"
+        + (f"Page {page + 1} of {pages}, {total} in total." if total else
+           "Nothing on the account yet.")
+    ]
+    keyboard_rows = []
+    for offset, row in enumerate(rows, start=1):
+        number = first + offset
+        parts.append(_point_markdown(number, row, images))
+        keyboard_rows.append(await _point_buttons(number, row, page, sender_id, images))
+
+    if waiting:
+        parts.append(_waiting_note(waiting))
+    keyboard_rows += await _page_footer(page, pages, sender_id, waiting, images,
+                                        any_rows=bool(rows))
+
+    return ui.rich("\n\n".join(parts)), ui.keyboard(*keyboard_rows)
+
+
 async def _show_page(client, chat_id: int, sender_id: int, user_id: str,
-                     page: int, message=None) -> None:
+                     page: int, message=None, images: bool = False) -> None:
     try:
-        total = await supa.count(TABLE_CODES, {"user_id": f"eq.{user_id}"})
-        rows = await _page_rows(user_id, page)
+        rich, buttons = await build_saved_page(sender_id, user_id, page, images)
     except supa.SupabaseError:
         log.exception("Could not read the saved codes.")
         await ui.send_rich(
@@ -135,208 +234,47 @@ async def _show_page(client, chat_id: int, sender_id: int, user_id: str,
         )
         return
 
-    # Normally empty: the merge runs at link time and clears it. Anything still
-    # here is a code the portal would not take, so the way to retry has to be
-    # somewhere the owner will actually look.
-    waiting = await db.count_favourites(sender_id)
-
-    if total == 0 and not waiting:
-        await ui.send_rich(
-            client, chat_id,
-            "<b>Nothing saved yet</b>\n"
-            "\n"
-            "Generate a code here and press Save, or save one from the portal. "
-            "They all land in the same place.",
-            buttons=ui.keyboard(ui.row(ui.portal_button())),
-        )
-        return
-
-    pages = max(1, -(-total // SAVED_PAGE_SIZE))
-    page = max(0, min(page, pages - 1))
-    first = page * SAVED_PAGE_SIZE
-
-    lines = [
-        "<b>Your saved codes</b>\n"
-        + (f"Page {page + 1} of {pages}, {total} in total.\n" if total else
-           "Nothing on the account yet.")
-    ]
-    keyboard_rows = []
-
-    for offset, row in enumerate(rows, start=1):
-        number = first + offset
-        lines.append(_point_text(number, row))
-        keyboard_rows.append(await _point_buttons(number, row, page, sender_id))
-
-    keyboard_rows += await _page_footer(page, pages, sender_id, waiting,
-                                        images_offer=bool(rows))
-    lines += _waiting_note(waiting)
-
-    body = "\n".join(lines)
-    buttons = ui.keyboard(*keyboard_rows)
     if message is not None:
-        await ui.edit_rich(message, body, buttons=buttons)
+        await ui.edit_rich(message, rich=rich, buttons=buttons)
     else:
-        await ui.send_rich(client, chat_id, body, buttons=buttons)
-
-
-def _waiting_note(waiting: int) -> list[str]:
-    if not waiting:
-        return []
-    return [
-        f"\n{waiting} {'code' if waiting == 1 else 'codes'} saved in this "
-        "chat never made it onto your account. They are still here."
-    ]
-
-
-async def _page_footer(page: int, pages: int, sender_id: int, waiting: int,
-                       images_offer: bool) -> list:
-    """The rows under the entries: paging, the image offer, the portal, and
-    the retry for anything a link left behind."""
-    rows = []
-    nav = []
-    if page > 0:
-        nav.append(await ui.inline_button(
-            "Previous", "saved_page", {"page": page - 1}, owner_id=sender_id))
-    if page + 1 < pages:
-        nav.append(await ui.inline_button(
-            "Next", "saved_page", {"page": page + 1}, owner_id=sender_id))
-    if nav:
-        rows.append(nav)
-
-    rows.append(ui.row(
-        await ui.inline_button(
-            "Send these as images", "saved_images", {"page": page},
-            owner_id=sender_id,
-        ) if images_offer else None,
-        ui.portal_button("On the web"),
-    ))
-
-    if waiting:
-        rows.append(ui.row(
-            await ui.inline_button(
-                f"Move {waiting} waiting {'code' if waiting == 1 else 'codes'} across",
-                "fav_merge", {"page": page}, owner_id=sender_id),
-        ))
-    return rows
+        await ui.send_rich(client, chat_id, rich=rich, buttons=buttons)
 
 
 @dispatch.on("saved_page")
 async def _cb_saved_page(event, button):
+    """Paging and the image toggle, which are the same redraw."""
     link = await linking.link_for_telegram(event.sender_id)
     if not link:
         await event.answer("This chat is not connected.", alert=True)
         return
-    await event.answer()
+    payload = button["payload"]
+    await event.answer("Loading the pictures." if payload.get("images") else None)
     await _show_page(event.client, event.chat_id, event.sender_id,
-                     link["user_id"], int(button["payload"]["page"]),
-                     message=await event.get_message())
-
-
-@dispatch.on("saved_images")
-async def _cb_saved_images(event, button):
-    link = await linking.link_for_telegram(event.sender_id)
-    if not link:
-        await event.answer("This chat is not connected.", alert=True)
-        return
-
-    page = int(button["payload"]["page"])
-    user_id = link["user_id"]
-    try:
-        total = await supa.count(TABLE_CODES, {"user_id": f"eq.{user_id}"})
-        rows = await _page_rows(user_id, page)
-    except supa.SupabaseError:
-        log.exception("Could not read the saved codes.")
-        await event.answer("The portal is not answering right now.", alert=True)
-        return
-    if not rows:
-        await event.answer("That page is empty now.", alert=True)
-        return
-    await event.answer("Sending.")
-
-    # One message cannot hold several pictures, so the list unfolds instead:
-    # the message that carried it keeps the heading and the paging, and every
-    # numbered entry follows it as a photo with that entry as its caption and
-    # its own Open and Delete underneath. Same numbers, same buttons, just with
-    # the picture where the text used to be.
-    pages = max(1, -(-total // SAVED_PAGE_SIZE))
-    page = max(0, min(page, pages - 1))
-    first = page * SAVED_PAGE_SIZE
-    sender_id = event.sender_id
-    waiting = await db.count_favourites(sender_id)
-
-    header = [
-        "<b>Your saved codes</b>\n"
-        f"Page {page + 1} of {pages}, {total} in total. Each one on this page "
-        "follows below with its picture."
-    ] + _waiting_note(waiting)
-    footer = await _page_footer(page, pages, sender_id, waiting, images_offer=False)
-    await ui.edit_rich(await event.get_message(), "\n".join(header),
-                       buttons=ui.keyboard(*footer))
-
-    for offset, row in enumerate(rows, start=1):
-        number = first + offset
-        caption = _point_text(number, row)
-        buttons = ui.keyboard(
-            await _point_buttons(number, row, page, sender_id, as_image=True)
-        )
-        try:
-            if not row.get("image_url"):
-                raise ValueError("no image stored for this code")
-            await ui.send_rich(event.client, event.chat_id, caption,
-                               file=row["image_url"], buttons=buttons)
-        except Exception:  # noqa: BLE001 - one bad image must not drop the rest
-            log.exception("Could not send the image for saved code %s.", row["id"])
-            # The entry still gets its place in the sequence, just without the
-            # picture, so the numbering and the buttons stay complete.
-            await ui.send_rich(
-                event.client, event.chat_id,
-                caption + "\n    <i>The picture would not load. Open still works.</i>",
-                buttons=buttons,
-            )
+                     link["user_id"], int(payload.get("page", 0)),
+                     message=await event.get_message(),
+                     images=bool(payload.get("images")))
 
 
 @dispatch.on("saved_delete_ask")
 async def _cb_saved_delete_ask(event, button):
     payload = button["payload"]
     await event.answer()
-    # Keep it has to put back whatever was there before: the whole list, or
-    # the one caption under a picture. The payload says which, and it is
-    # passed along whole so Keep can find its way back to the same entry.
-    keep_payload = payload if payload.get("img") else {"page": payload.get("page", 0)}
+    back = {"page": payload.get("page", 0), "images": payload.get("images", False)}
     buttons = ui.keyboard(ui.row(
         await ui.inline_button(
             "Delete it", "saved_delete", payload, owner_id=event.sender_id),
         await ui.inline_button(
-            "Keep it", "saved_back", keep_payload, owner_id=event.sender_id),
+            "Keep it", "saved_back", back, owner_id=event.sender_id),
     ))
     await ui.edit_rich(
         await event.get_message(),
-        f"<b>Delete code {payload.get('n', '')}?</b>\n"
-        "\n"
-        "The image and the record both go, on the portal as well as here. "
-        "There is no undo.",
+        rich=ui.rich(
+            f"# Delete code {payload.get('n', '')}?\n"
+            "\n"
+            "The image and the record both go, on the portal as well as here. "
+            "There is no undo."
+        ),
         buttons=buttons,
-    )
-
-
-async def _restore_point(event, payload: dict, link: dict) -> None:
-    """Put a picture's caption back the way it was, after a Keep."""
-    row = await supa.select_one(
-        TABLE_CODES, {"id": f"eq.{payload['id']}"},
-        columns=SAVED_COLUMNS + ",user_id",
-    )
-    message = await event.get_message()
-    if row is None or row["user_id"] != link["user_id"]:
-        await ui.edit_rich(message, f"<b>{payload.get('n', '')}.</b> This code "
-                           "is already gone.", buttons=None)
-        return
-    number = int(payload.get("n", 0))
-    await ui.edit_rich(
-        message, _point_text(number, row),
-        buttons=ui.keyboard(await _point_buttons(
-            number, row, int(payload.get("page", 0)), event.sender_id,
-            as_image=True,
-        )),
     )
 
 
@@ -347,9 +285,9 @@ async def _cb_saved_delete(event, button):
         await event.answer("This chat is not connected.", alert=True)
         return
 
-    code_id = button["payload"]["id"]
+    payload = button["payload"]
     row = await supa.select_one(
-        TABLE_CODES, {"id": f"eq.{code_id}"}, columns="id,user_id,image_path"
+        TABLE_CODES, {"id": f"eq.{payload['id']}"}, columns="id,user_id,image_path"
     )
     if row is None or row["user_id"] != link["user_id"]:
         await event.answer("That code is not yours, or it is already gone.",
@@ -358,21 +296,13 @@ async def _cb_saved_delete(event, button):
 
     if row.get("image_path"):
         await supa.remove([row["image_path"]])
-    await supa.delete(TABLE_CODES, {"id": f"eq.{code_id}"})
+    await supa.delete(TABLE_CODES, {"id": f"eq.{payload['id']}"})
 
     await event.answer("Deleted.")
-    payload = button["payload"]
-    if payload.get("img"):
-        # The picture stays in the chat, since it was already sent, but its
-        # caption says what happened and the buttons under it are gone.
-        await ui.edit_rich(
-            await event.get_message(),
-            f"<b>{payload.get('n', '')}.</b> Deleted.", buttons=None,
-        )
-        return
     await _show_page(event.client, event.chat_id, event.sender_id,
                      link["user_id"], int(payload.get("page", 0)),
-                     message=await event.get_message())
+                     message=await event.get_message(),
+                     images=bool(payload.get("images")))
 
 
 @dispatch.on("saved_back")
@@ -383,12 +313,10 @@ async def _cb_saved_back(event, button):
         return
     await event.answer("Kept.")
     payload = button["payload"]
-    if payload.get("img"):
-        await _restore_point(event, payload, link)
-        return
     await _show_page(event.client, event.chat_id, event.sender_id,
                      link["user_id"], int(payload.get("page", 0)),
-                     message=await event.get_message())
+                     message=await event.get_message(),
+                     images=bool(payload.get("images")))
 
 
 # -------------------------------------------------------------- saving one --
@@ -519,16 +447,26 @@ async def _show_favourites(client, chat_id: int, sender_id: int,
         )
         return
 
-    lines = [
-        f"<b>Saved in this chat</b>\n{len(rows)} "
-        f"{'code' if len(rows) == 1 else 'codes'}, newest last.\n"
+    rich, buttons = await build_favourites(rows, sender_id)
+    if message is not None:
+        await ui.edit_rich(message, rich=rich, buttons=buttons)
+    else:
+        await ui.send_rich(client, chat_id, rich=rich, buttons=buttons)
+
+
+async def build_favourites(rows: list[dict], sender_id: int):
+    """The chat-held list as (rich, buttons). No pictures: only the payload
+    is kept here, and it is drawn fresh on the way to the account."""
+    parts = [
+        f"# Saved in this chat\n{len(rows)} "
+        f"{'code' if len(rows) == 1 else 'codes'}, newest last."
     ]
     keyboard_rows = []
     for number, row in enumerate(rows, start=1):
         label = qrgen.KIND_LABELS.get(row["kind"], "Code")
-        lines.append(
-            f"<b>{number}.</b> {ui.esc(label)}\n"
-            f"    {ui.esc(qrgen.describe(row['payload'])[:70])}"
+        parts.append(
+            f"**{number}.** {escape_md(label)}\n"
+            f"{escape_md(qrgen.describe(row['payload'])[:70])}"
         )
         keyboard_rows.append([
             await ui.inline_button(
@@ -540,8 +478,8 @@ async def _show_favourites(client, chat_id: int, sender_id: int,
         ])
 
     if supa.enabled():
-        lines.append(
-            "\nThese live in this chat alone. Connect a portal account and they "
+        parts.append(
+            "These live in this chat alone. Connect a portal account and they "
             "move onto it, skipping anything it already has."
         )
         keyboard_rows.append(ui.row(
@@ -549,12 +487,7 @@ async def _show_favourites(client, chat_id: int, sender_id: int,
                                    owner_id=sender_id),
         ))
 
-    body = "\n".join(lines)
-    buttons = ui.keyboard(*keyboard_rows)
-    if message is not None:
-        await ui.edit_rich(message, body, buttons=buttons)
-    else:
-        await ui.send_rich(client, chat_id, body, buttons=buttons)
+    return ui.rich("\n\n".join(parts)), ui.keyboard(*keyboard_rows)
 
 
 @dispatch.on("fav_send")
@@ -579,9 +512,11 @@ async def _cb_fav_merge(event, button):
         return
     await event.answer("Moving them.")
     await merge_favourites(event.client, event.sender_id, link["user_id"])
+    payload = button["payload"]
     await _show_page(event.client, event.chat_id, event.sender_id,
-                     link["user_id"], int(button["payload"].get("page", 0)),
-                     message=await event.get_message())
+                     link["user_id"], int(payload.get("page", 0)),
+                     message=await event.get_message(),
+                     images=bool(payload.get("images")))
 
 
 @dispatch.on("fav_delete")
@@ -773,16 +708,18 @@ async def _show_settings(client, chat_id: int, sender_id: int, message=None) -> 
             "but do scan one before you print it."
         )
 
-    body = (
-        "<b>Your defaults</b>\n"
+    body = ui.rich(
+        "# Your defaults\n"
         "\n"
-        f"Size, {prefs['size']} px\n"
-        f"Quiet zone, {prefs['margin']} modules\n"
-        f"Error correction, {prefs['ec']}\n"
-        f"Watermark, {'on' if watermark_on else 'off'}\n"
-        f"The mark reads, {ui.code(mark)}\n"
-        f"Colours, {_colour_name(prefs['fg'], prefs['bg'])}\n"
-        "\n"
+        + reply.table(["Setting"], [
+            ["Size", f"{prefs['size']} px"],
+            ["Quiet zone", f"{prefs['margin']} modules"],
+            ["Error correction", prefs["ec"]],
+            ["Watermark", "on" if watermark_on else "off"],
+            ["The mark reads", mark],
+            ["Colours", _colour_name(prefs["fg"], prefs["bg"])],
+        ])
+        + "\n\n"
         "These apply to everything generated in this chat, including inline "
         "results and anything you save to your account. Each button steps to "
         "the next option." + warning
@@ -822,9 +759,9 @@ async def _show_settings(client, chat_id: int, sender_id: int, message=None) -> 
     )
 
     if message is not None:
-        await ui.edit_rich(message, body, buttons=buttons)
+        await ui.edit_rich(message, rich=body, buttons=buttons)
     else:
-        await ui.send_rich(client, chat_id, body, buttons=buttons)
+        await ui.send_rich(client, chat_id, rich=body, buttons=buttons)
 
 
 @dispatch.on("pref_cycle")

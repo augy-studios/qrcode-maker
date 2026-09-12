@@ -7,6 +7,7 @@ from telethon import events
 import db
 import dispatch
 import linking
+import reply
 import runtime
 import supa
 import ui
@@ -19,6 +20,7 @@ from config import (
     TABLE_TOKENS,
     WEBAPP_URL,
 )
+from reply import escape_md
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ def register(client) -> None:
                 )
             ) if supa.enabled() and event.is_private else [],
         )
-        await ui.reply_rich(event, ui.start_text(), buttons=buttons)
+        await ui.reply_rich(event, rich=ui.start_text(), buttons=buttons)
         raise events.StopPropagation
 
     @client.on(events.NewMessage(
@@ -181,70 +183,76 @@ def register(client) -> None:
             # Say nothing useful. An unlisted command should not confirm to a
             # stranger that it exists.
             raise events.StopPropagation
-        await ui.reply_rich(event, await _health_report(), buttons=None)
+        await ui.reply_rich(event, rich=await _health_report(), buttons=None)
         raise events.StopPropagation
 
 
 # ------------------------------------------------------------------ health --
 
 
-async def _health_report() -> str:
-    """Everything worth knowing about the running process, in one message."""
+async def _health_report() -> dict:
+    """Everything worth knowing about the running process, as tables."""
     import handlers_qr  # imported here to keep the module import graph flat
 
     counts = await db.counts()
     size_mb = counts["bytes"] / (1024 * 1024)
 
-    lines = [
-        "<b>Health</b>",
-        "",
-        f"Uptime, {runtime.human_duration(runtime.uptime_seconds())}",
-        f"Reading codes, {'on' if handlers_qr.DECODING_AVAILABLE else 'off'}",
-        f"Portal, {WEBAPP_URL}",
-        "",
-        "<b>Local database</b>",
-        f"Buttons, {counts['buttons']} total, {counts['buttons_active']} still live",
-        f"Builders in progress, {counts['flows']}",
-        f"People with saved settings, {counts['prefs']}",
-        f"History rows, {counts['history']}",
-        f"Codes waiting on a link, {counts['favourites']}",
-        f"Size on disk, {size_mb:.1f} MB",
+    sections = [
+        "# Health",
+        reply.table(["Value"], [
+            ["Uptime", runtime.human_duration(runtime.uptime_seconds())],
+            ["Reading codes", "on" if handlers_qr.DECODING_AVAILABLE else "off"],
+            ["Portal", WEBAPP_URL],
+        ]),
+        "## Local database",
+        reply.table(["Count"], [
+            ["Buttons", f"{counts['buttons']} total, {counts['buttons_active']} still live"],
+            ["Builders in progress", counts["flows"]],
+            ["People with saved settings", counts["prefs"]],
+            ["History rows", counts["history"]],
+            ["Codes waiting on a link", counts["favourites"]],
+            ["Size on disk", f"{size_mb:.1f} MB"],
+        ]),
+        "## Portal link",
     ]
 
     if not supa.enabled():
-        lines += ["", "<b>Portal link</b>", "Off, no credentials configured."]
-        return "\n".join(lines)
+        sections.append("Off, no credentials configured.")
+        return ui.rich("\n\n".join(sections))
 
-    lines += [
-        "",
-        "<b>Portal link</b>",
-        f"Token sweep, {runtime.sweeper_state()}, every {POLL_INTERVAL}s",
-        f"Last good reply, {runtime.ago(runtime.last_supabase_ok_at)}",
+    portal = [
+        ["Token sweep", f"{runtime.sweeper_state()}, every {POLL_INTERVAL}s"],
+        ["Last good reply", runtime.ago(runtime.last_supabase_ok_at)],
     ]
-
     if runtime.last_supabase_error:
-        lines += [
-            f"Last refusal, {runtime.ago(runtime.last_supabase_error_at)}",
-            f"<pre>{ui.esc(runtime.last_supabase_error)}</pre>",
-        ]
-    else:
-        lines.append("No refusals since start up.")
+        portal.append(["Last refusal", runtime.ago(runtime.last_supabase_error_at)])
 
     # A live count doubles as proof the credentials still work.
+    unreachable = ""
     try:
         linked = await supa.count(TABLE_LINKS)
         live = await supa.count(
             TABLE_TOKENS, {"status": "in.(pending,delivered)"}
         )
-        lines += [
-            "",
-            f"Connected accounts, {linked}",
-            f"Tokens still open, {live}",
-        ]
+        portal += [["Connected accounts", linked], ["Tokens still open", live]]
     except supa.SupabaseError as exc:
-        lines += ["", f"Could not reach the portal just now: {ui.esc(str(exc)[:200])}"]
+        unreachable = (
+            "Could not reach the portal just now: " + escape_md(str(exc)[:200])
+        )
 
-    return "\n".join(lines)
+    sections.append(reply.table(["Value"], portal))
+    if runtime.last_supabase_error:
+        # A fenced block keeps the refusal verbatim, whatever it contains.
+        fence = "```"
+        sections.append(
+            f"{fence}\n{runtime.last_supabase_error.replace(fence, '~~~')}\n{fence}"
+        )
+    else:
+        sections.append("No refusals since start up.")
+    if unreachable:
+        sections.append(unreachable)
+
+    return ui.rich("\n\n".join(sections))
 
 
 # ------------------------------------------------------------- shared work --

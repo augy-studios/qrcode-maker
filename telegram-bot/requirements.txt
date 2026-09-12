@@ -1,5 +1,6 @@
-# Telethon 2.x is a different API surface, so stay on the 1.x line.
-Telethon>=1.36,<2.0
+# Telethon 2.x is a different API surface, so stay on the 1.x line. 1.44 is the
+# first release whose TL layer carries rich_message on send and edit.
+Telethon>=1.44,<2.0
 python-dotenv>=1.0,<2.0
 httpx>=0.27,<1.0
 qrcode>=7.4,<9.0

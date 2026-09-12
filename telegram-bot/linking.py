@@ -579,10 +579,7 @@ async def _replace_prompt(client, token, meta, text, buttons=None) -> None:
     chat_id, message_id = meta.get("chat_id"), meta.get("message_id")
     if chat_id and message_id:
         try:
-            await client.edit_message(
-                chat_id, message_id, text, parse_mode="html", buttons=buttons
-            )
-            await db.retire_message_buttons(chat_id, message_id)
+            await ui.edit_rich_at(client, chat_id, message_id, text, buttons=buttons)
             return
         except Exception:  # noqa: BLE001 - fall back to a fresh message
             log.debug("Could not edit the sign in prompt, sending a new one.")

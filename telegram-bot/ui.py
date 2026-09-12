@@ -1,9 +1,14 @@
 """Rich message helpers and the shared text.
 
 Everything the bot says goes out through send_rich or one of its siblings, so
-formatting, button registration and error handling stay in one place. Messages
-are HTML, previews are off unless a link is the point of the message, and any
-value that came from a user is escaped on the way in.
+formatting, button registration and error handling stay in one place. Text goes
+out as a Telegram Rich Message (reply.py): a view that builds its own Rich
+Markdown passes it as ``rich=``, and text written in the HTML parse mode is
+converted on the way through, so nothing is left on parse_mode. Only captions
+under media still use it, because media messages have no rich form.
+
+Previews are off unless a link is the point of the message, and any value that
+came from a user is escaped on the way in.
 """
 
 import base64
@@ -11,15 +16,19 @@ import html
 import json
 import logging
 
-from telethon import Button
+from telethon import Button, types
 from telethon.errors import (
     MessageIdInvalidError,
     MessageNotModifiedError,
     UserIsBlockedError,
 )
 
+_CAPTIONED_MEDIA = (types.MessageMediaPhoto, types.MessageMediaDocument)
+
 import db
+import reply
 from config import DONATION_URL, WEBAPP_URL
+from reply import escape_md
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +40,24 @@ def esc(value) -> str:
 
 def code(value) -> str:
     return f"<code>{esc(value)}</code>"
+
+
+def rich(markdown: str, fallback: str | None = None) -> dict:
+    """The reply.py contract. Without a fallback, one is read off the markdown."""
+    return {"markdown": markdown, "fallback": fallback or md_plain(markdown)}
+
+
+def md_plain(markdown: str) -> str:
+    """A plain rendering of Rich Markdown for old clients and rejections."""
+    import re
+    text = markdown
+    text = re.sub(r"!\[[^\]]*\]\(([^)\s]+)[^)]*\)", r"\1", text)   # images
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.M)             # headings
+    text = re.sub(r"(\*\*|__)(.+?)\1", r"\2", text)                # bold
+    text = re.sub(r"(?<![\w\\])[*_](.+?)[*_](?!\w)", r"\1", text)  # italic
+    text = re.sub(r"^\|\s*-{3,}.*$\n?", "", text, flags=re.M)      # table rules
+    text = re.sub(r"\\([\\*_~`|\[\]#>=])", r"\1", text)            # escapes
+    return text.strip()
 
 
 def _collect_button_ids(buttons) -> list[str]:
@@ -48,12 +75,20 @@ def _collect_button_ids(buttons) -> list[str]:
     return found
 
 
-async def send_rich(client, entity, text=None, *, buttons=None, file=None,
-                    reply_to=None, link_preview=False, silent=False,
-                    force_document=False):
-    """Send one formatted message, with optional media and inline buttons.
+def _as_rich(text, rich_content):
+    """Whichever of the two the caller gave, as the reply.py contract."""
+    return rich_content if rich_content is not None else reply.from_html(text or "")
 
-    Returns the sent message, or None when the user has blocked the bot.
+
+async def send_rich(client, entity, text=None, *, rich=None, buttons=None,
+                    file=None, reply_to=None, link_preview=False, silent=False,
+                    force_document=False):
+    """Send one message, with optional media and inline buttons.
+
+    ``text`` is HTML in the old parse mode, ``rich`` is the reply.py contract.
+    Either becomes a Rich Message on the way out; with a file, the text is the
+    caption. Returns the sent message, or None when the user has blocked the
+    bot.
     """
     try:
         if file is not None:
@@ -68,42 +103,44 @@ async def send_rich(client, entity, text=None, *, buttons=None, file=None,
                 force_document=force_document,
             )
         else:
-            message = await client.send_message(
-                entity,
-                text,
-                parse_mode="html",
-                buttons=buttons,
-                reply_to=reply_to,
-                link_preview=link_preview,
-                silent=silent,
+            message = await reply.send_rich_message(
+                client, entity, _as_rich(text, rich), buttons,
+                reply_to=reply_to, silent=silent, link_preview=link_preview,
             )
     except UserIsBlockedError:
         log.info("Cannot reach %s, the bot is blocked.", entity)
         return None
 
     ids = _collect_button_ids(buttons)
-    if ids:
+    if ids and message is not None:
         await db.bind_button_message(ids, message.chat_id, message.id)
     return message
 
 
-async def edit_rich(message, text=None, *, buttons=None, link_preview=False,
-                    file=None):
-    """Rewrite a message in place, retiring the buttons it used to carry."""
+async def edit_rich(message, text=None, *, rich=None, buttons=None,
+                    link_preview=False, file=None):
+    """Rewrite a message in place, retiring the buttons it used to carry.
+
+    No buttons means the keyboard goes; the rich edit sends an empty one for
+    exactly that reason.
+    """
     try:
         await db.retire_message_buttons(message.chat_id, message.id)
     except Exception:  # noqa: BLE001 - never let bookkeeping break a reply
         log.exception("Could not retire buttons for message %s", message.id)
 
     try:
-        if file is not None:
-            edited = await message.edit(
-                text, parse_mode="html", buttons=buttons, file=file
-            )
+        if file is not None or isinstance(
+            getattr(message, "media", None), _CAPTIONED_MEDIA
+        ):
+            # A photo or file has a caption, not a rich body. A link preview
+            # is media too as far as Telethon is concerned, but its message is
+            # ordinary text and edits like one.
+            await message.edit(text, parse_mode="html", buttons=buttons, file=file)
         else:
-            edited = await message.edit(
-                text, parse_mode="html", buttons=buttons,
-                link_preview=link_preview,
+            await reply.edit_rich_message_at(
+                message.client, message.chat_id, message.id,
+                _as_rich(text, rich), buttons, link_preview=link_preview,
             )
     except MessageNotModifiedError:
         return message
@@ -114,7 +151,22 @@ async def edit_rich(message, text=None, *, buttons=None, link_preview=False,
     ids = _collect_button_ids(buttons)
     if ids:
         await db.bind_button_message(ids, message.chat_id, message.id)
-    return edited
+    return message
+
+
+async def edit_rich_at(client, chat_id, message_id, text=None, *, rich=None,
+                       buttons=None):
+    """Edit a message the bot only has the id of, retiring its old buttons."""
+    try:
+        await db.retire_message_buttons(chat_id, message_id)
+    except Exception:  # noqa: BLE001
+        log.exception("Could not retire buttons for message %s", message_id)
+    await reply.edit_rich_message_at(
+        client, chat_id, message_id, _as_rich(text, rich), buttons
+    )
+    ids = _collect_button_ids(buttons)
+    if ids:
+        await db.bind_button_message(ids, chat_id, message_id)
 
 
 async def reply_rich(event, text=None, **kwargs):
@@ -175,8 +227,11 @@ def keyboard(*rows):
 
 # ------------------------------------------------------------------- texts --
 
+# Rich Markdown. The command names are filled in by start_text, and a slash
+# command is one of the things Telegram picks out of plain text by itself, so
+# they need no markup of their own.
 START = (
-    "<b>QR Maker</b>\n"
+    "# QR Maker\n"
     "\n"
     "Turn a link, a note, a WiFi network, a contact or a calendar event into a "
     "scannable code, without leaving this chat. Every code is drawn at the "
@@ -184,33 +239,35 @@ START = (
     "says uwu to begin with, the same as the portal, and {watermark} makes it "
     "say whatever you like.\n"
     "\n"
-    "<b>Make a code</b>\n"
+    "## Make a code\n"
     "Send any text or link on its own, or use one of these.\n"
-    "{qr} followed by text or a link\n"
-    "{wifi} builds a WiFi code step by step\n"
-    "{contact} builds a contact card\n"
-    "{event} builds a calendar event\n"
     "\n"
-    "<b>Read a code</b>\n"
+    "- {qr} followed by text or a link\n"
+    "- {wifi} builds a WiFi code step by step\n"
+    "- {contact} builds a contact card\n"
+    "- {event} builds a calendar event\n"
+    "\n"
+    "## Read a code\n"
     "Send a photo of a QR code and it comes back as plain text. "
     "{decode} explains the details.\n"
     "\n"
-    "<b>Keeping codes</b>\n"
+    "## Keeping codes\n"
     "Press Save under any code and it is kept. With an account connected it "
     "goes straight there; without one it waits in this chat and moves across "
     "the moment you connect, skipping anything already on the account.\n"
-    "{saved} lists whichever of the two you have\n"
     "\n"
-    "<b>Your account</b>\n"
-    "{link} connects this chat to your portal account\n"
-    "{unlink} disconnects it again\n"
-    "{code} issues a code to type into the portal\n"
-    "{twofa} turns sign in approval on or off\n"
+    "- {saved} lists whichever of the two you have\n"
     "\n"
-    "<b>Everything else</b>\n"
-    "{settings} changes size, colour and error correction\n"
-    "{watermark} changes the mark in the middle\n"
-    "{cancel} abandons whatever is half finished\n"
+    "## Your account\n"
+    "- {link} connects this chat to your portal account\n"
+    "- {unlink} disconnects it again\n"
+    "- {code} issues a code to type into the portal\n"
+    "- {twofa} turns sign in approval on or off\n"
+    "\n"
+    "## Everything else\n"
+    "- {settings} changes size, colour and error correction\n"
+    "- {watermark} changes the mark in the middle\n"
+    "- {cancel} abandons whatever is half finished\n"
     "\n"
     "Run {start} at any time to see this list again."
 )
@@ -221,8 +278,10 @@ COMMAND_LIST = (
 )
 
 
-def start_text() -> str:
-    return START.format(**{name: f"/{name}" for name in COMMAND_LIST})
+def start_text() -> dict:
+    """The welcome, as the reply.py contract."""
+    markdown = START.format(**{name: f"/{name}" for name in COMMAND_LIST})
+    return rich(markdown)
 
 
 # What Telegram shows in the command menu. Kept here so bot.py can push it and

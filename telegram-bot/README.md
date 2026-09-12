@@ -304,6 +304,7 @@ db.py                 SQLite, the bot's own state
 dispatch.py           button and text flow registries, command patterns, the private gate
 runtime.py            live process state, read by the health command
 ui.py                 send_rich and friends, plus every shared string
+reply.py              Telegram Rich Messages over raw TL requests, with plain fallbacks
 supa.py               async Supabase client over PostgREST and storage
 qrgen.py              payload builders, renderer, watermark, detection
 linking.py            the four link flows and the token sweep
@@ -311,7 +312,7 @@ handlers_core.py      start, help, link, unlink, code, twofa, cancel, health
 handlers_qr.py        generating, the guided builders, decoding, inline mode
 handlers_account.py   saved codes, the favourites merge, settings, the mark
 run.sh                tmux wrapper
-requirements.txt      pinned to the Telethon 1.x line
+requirements.txt      pinned to Telethon 1.44+, the first layer with rich messages
 .env.example          every variable, documented
 assets/               Jua-Regular.ttf and its licence
 ```

@@ -9,12 +9,14 @@ it was asked for.
 import asyncio
 import io
 import logging
+import uuid
 
 from telethon import events
 
 import db
 import dispatch
 import qrgen
+import reply
 import ui
 from config import (
     MAX_PAYLOAD_CHARS,
@@ -555,14 +557,19 @@ async def _answer_inline(event) -> None:
         await event.answer([result], cache_time=1)
     except Exception:  # noqa: BLE001 - photo results can fail, text still works
         log.debug("Inline photo result failed, answering with text.", exc_info=True)
-        await event.answer([
-            await builder.article(
-                title="Send this as a code",
-                description=content[:80],
-                text=caption,
-                parse_mode="html",
-            )
-        ], cache_time=1)
+        # A rich article, built raw: Telethon's builder cannot carry one.
+        label = qrgen.KIND_LABELS.get(kind, "Code")
+        article = reply.inline_article(
+            result_id=str(uuid.uuid4()),
+            title="Send this as a code",
+            description=content[:80],
+            rich=ui.rich(
+                f"**{reply.escape_md(label)}**\n\n{reply.escape_md(content[:200])}",
+                f"{label}\n{content[:200]}",
+            ),
+            client=event.client,
+        )
+        await event.answer([article], cache_time=1)
 
 
 # --------------------------------------------------------------- callbacks --
