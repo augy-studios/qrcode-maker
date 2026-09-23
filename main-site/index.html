@@ -15,10 +15,16 @@
                 cyan: "not-green-5",
                 white: "really-light-green"
             };
-            var m = localStorage.getItem(k + ".mode") || "light";
+            var p = localStorage.getItem(k + ".mode");
+            if (p !== "dark" && p !== "time") p = "light";
+            // Time-based: light 7:00 until 19:00. Same hours as
+            // LIGHT_FROM_HOUR / LIGHT_UNTIL_HOUR in js/theme.js.
+            var h = new Date().getHours();
+            var m = p === "time" ? (h >= 7 && h < 19 ? "light" : "dark") : p;
             var c = localStorage.getItem(k + ".colorTheme") ||
                 legacy[localStorage.getItem("qr_theme")] || "classic";
             document.documentElement.setAttribute("data-mode", m);
+            document.documentElement.setAttribute("data-mode-preference", p);
             document.documentElement.setAttribute("data-color-theme", c);
         })();
     </script>
@@ -403,7 +409,9 @@
             <div class="mode-toggle" id="modeToggle">
                 <button class="mode-btn" type="button" data-mode="light" aria-pressed="false"><span data-icon="sun"></span>Light</button>
                 <button class="mode-btn" type="button" data-mode="dark" aria-pressed="false"><span data-icon="moon"></span>Dark</button>
+                <button class="mode-btn mode-btn-wide" type="button" data-mode="time" aria-pressed="false"><span data-icon="clock"></span>Time-based</button>
             </div>
+            <p class="mode-note" id="modeNote" hidden></p>
             <p class="modal-section-label">Brand colour</p>
             <div class="swatch-grid" id="swatchGrid"></div>
         </div>
@@ -420,11 +428,7 @@
 
     <script src="/script.js"></script>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js');
-        }
-    </script>
+    <script src="/js/sw-update.js"></script>
 
 </body>
 

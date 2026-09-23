@@ -205,7 +205,8 @@ body.modal-open { overflow: hidden; }
 
 /* ---- mode toggle ---- */
 .mode-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 4px;
   border-radius: 14px;
@@ -229,6 +230,15 @@ body.modal-open { overflow: hidden; }
 .mode-btn.active {
   background: var(--brand-fill);
   color: var(--on-brand);
+}
+/* Time-based sits under Light and Dark, across both columns. */
+.mode-btn-wide { grid-column: 1 / -1; }
+
+/* "Light from 7:00 to 19:00…", shown only while Time-based is picked. */
+.mode-note {
+  font-size: 0.78rem;
+  /* Same stacked-surface case as .mode-btn. */
+  color: var(--muted-strong);
 }
 
 /* ---- swatch grid ---- */
@@ -269,6 +279,41 @@ body.modal-open { overflow: hidden; }
 
 @media (max-width: 480px) {
   .swatch-grid { grid-template-columns: 1fr; }
+}
+
+/* ── UPDATE BAR (js/sw-update.js) ── */
+/* Above the topbar and quieter than it. Tinted from --brand-ink, since the
+   brand swatches themselves are too pale to read as a tint at this strength. */
+.update-notice {
+  background: color-mix(in srgb, var(--brand-ink) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--brand-ink) 25%, transparent);
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.update-notice-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0.5rem 24px;
+  /* Under the notch on a phone, where the bar is the topmost thing on screen. */
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.update-notice p { flex: 1 1 auto; min-width: 0; }
+.update-notice .btn-primary,
+.update-notice .btn-ghost {
+  flex: none;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+.update-notice .btn-ghost { color: var(--ink); }
+
+@media (max-width: 600px) {
+  .update-notice-inner { padding-left: 16px; padding-right: 16px; }
 }
 
 /* ── TOP BAR ── */

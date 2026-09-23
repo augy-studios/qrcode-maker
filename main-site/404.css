@@ -310,3 +310,44 @@ body {
     right: -100%;
   }
 }
+
+/* Update bar (js/sw-update.js). This page has none of style.css's tokens or
+   buttons, so it carries its own copy in the page's colours. */
+.update-notice {
+  position: relative;
+  z-index: 1;
+  background: rgba(102, 255, 102, 0.12);
+  border-bottom: 1px solid rgba(102, 255, 102, 0.3);
+  color: #fff;
+  font-family: Jua, sans-serif;
+  font-size: 0.875rem;
+}
+
+.update-notice-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0.5rem 16px;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.update-notice p { flex: 1 1 auto; min-width: 0; margin: 0; }
+
+.update-notice button {
+  flex: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 5px 14px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+}
+
+.update-notice .btn-primary {
+  background: #ccffcc;
+  border-color: #ccffcc;
+  color: #121815;
+}

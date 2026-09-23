@@ -787,11 +787,6 @@ document.querySelectorAll('.pw-toggle').forEach(btn => {
     });
 });
 
-/* -- SERVICE WORKER -- */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
-
 /* -- SIGN IN COMPLETION -- */
 function finishSignIn(user, token, username, password, note) {
     currentUser = user;

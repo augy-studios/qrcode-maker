@@ -1,4 +1,4 @@
-// Theme system: 7 brand colour swatches + light/dark mode.
+// Theme system: 7 brand colour swatches + light/dark/time-based mode.
 // Default is always light + classic (#ccffcc), regardless of OS preference.
 // Once the user picks something, it is persisted.
 
@@ -16,6 +16,16 @@ const COLOR_THEMES = [
 
 const STORAGE_KEY_COLOR = `${APP_KEY}.colorTheme`;
 const STORAGE_KEY_MODE = `${APP_KEY}.mode`;
+
+// What the user picked. "time" is stored as-is and resolved to light or dark
+// on every read, so data-mode itself is only ever "light" or "dark".
+const MODE_PREFERENCES = ["light", "dark", "time"];
+
+// Time-based mode: light from LIGHT_FROM_HOUR until LIGHT_UNTIL_HOUR, local
+// time, dark the rest of the day. The pre-paint script in index.html's <head>
+// repeats these two numbers; keep them in step.
+const LIGHT_FROM_HOUR = 7;
+const LIGHT_UNTIL_HOUR = 19;
 
 // Old pre-retrofit key and its swatch ids. Read once, then dropped.
 const LEGACY_KEY = "qr_theme";
@@ -47,8 +57,24 @@ function getStoredColorTheme() {
   return localStorage.getItem(STORAGE_KEY_COLOR) || "classic";
 }
 
+function getModePreference() {
+  const stored = localStorage.getItem(STORAGE_KEY_MODE);
+  return MODE_PREFERENCES.includes(stored) ? stored : "light";
+}
+
+function isDaylightHours(date = new Date()) {
+  const hour = date.getHours();
+  return hour >= LIGHT_FROM_HOUR && hour < LIGHT_UNTIL_HOUR;
+}
+
+function resolveMode(preference) {
+  if (preference === "time") return isDaylightHours() ? "light" : "dark";
+  return preference === "dark" ? "dark" : "light";
+}
+
+// The mode on screen right now, never "time".
 function getStoredMode() {
-  return localStorage.getItem(STORAGE_KEY_MODE) || "light";
+  return resolveMode(getModePreference());
 }
 
 function applyColorTheme(id) {
@@ -62,17 +88,67 @@ function applyColorTheme(id) {
   return theme;
 }
 
-function applyMode(mode) {
-  const resolved = mode === "dark" ? "dark" : "light";
+function applyMode(preference) {
+  const pref = MODE_PREFERENCES.includes(preference) ? preference : "light";
+  const resolved = resolveMode(pref);
   document.documentElement.setAttribute("data-mode", resolved);
-  localStorage.setItem(STORAGE_KEY_MODE, resolved);
+  document.documentElement.setAttribute("data-mode-preference", pref);
+  localStorage.setItem(STORAGE_KEY_MODE, pref);
+  scheduleModeCheck();
   return resolved;
 }
+
+/* ---- time-based mode: flip at the boundary ---- */
+
+let modeCheckTimer = null;
+
+function msUntilNextBoundary(now = new Date()) {
+  const next = new Date(now);
+  const hour = now.getHours();
+  if (hour < LIGHT_FROM_HOUR) {
+    next.setHours(LIGHT_FROM_HOUR, 0, 0, 0);
+  } else if (hour < LIGHT_UNTIL_HOUR) {
+    next.setHours(LIGHT_UNTIL_HOUR, 0, 0, 0);
+  } else {
+    next.setDate(next.getDate() + 1);
+    next.setHours(LIGHT_FROM_HOUR, 0, 0, 0);
+  }
+  return next - now;
+}
+
+// One timer, aimed at the next boundary, only while "time" is picked.
+function scheduleModeCheck() {
+  clearTimeout(modeCheckTimer);
+  modeCheckTimer = null;
+  if (getModePreference() !== "time") return;
+  // A second past the boundary, so the hour has definitely turned over.
+  modeCheckTimer = setTimeout(refreshTimeMode, msUntilNextBoundary() + 1000);
+}
+
+function refreshTimeMode() {
+  if (getModePreference() !== "time") {
+    scheduleModeCheck();
+    return;
+  }
+  const before = document.documentElement.getAttribute("data-mode");
+  const after = applyMode("time");
+  if (before !== after) {
+    document.dispatchEvent(
+      new CustomEvent("uwu:modechange", { detail: { preference: "time", mode: after } })
+    );
+  }
+}
+
+// Background tabs throttle timers and a sleeping laptop skips them entirely,
+// so check again whenever the tab comes back into view.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshTimeMode();
+});
 
 function initTheme() {
   migrateLegacyTheme();
   applyColorTheme(getStoredColorTheme());
-  applyMode(getStoredMode());
+  applyMode(getModePreference());
 }
 
 /* ---- modal wiring ---- */
@@ -97,23 +173,43 @@ function buildThemeModal() {
   });
 
   document.getElementById("modeToggle").addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-mode]");
+    // Not "[data-mode]": <html> carries data-mode too, so a click in the gap
+    // between buttons would walk up to it and pick the resolved mode.
+    const btn = e.target.closest(".mode-btn");
     if (!btn) return;
     applyMode(btn.dataset.mode);
     syncThemeModalState();
   });
+
+  // Time-based crossed a boundary: the page has already flipped, keep the
+  // modal and the topbar icon in step with it.
+  document.addEventListener("uwu:modechange", syncThemeModalState);
+}
+
+function formatHour(hour) {
+  return new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function syncThemeModalState() {
   const activeTheme = getStoredColorTheme();
-  const activeMode = getStoredMode();
+  const activePreference = getModePreference();
+  const resolvedMode = resolveMode(activePreference);
   document.querySelectorAll("#swatchGrid .swatch").forEach((el) => {
     el.classList.toggle("active", el.dataset.themeId === activeTheme);
   });
   document.querySelectorAll("#modeToggle .mode-btn").forEach((el) => {
-    el.classList.toggle("active", el.dataset.mode === activeMode);
-    el.setAttribute("aria-pressed", String(el.dataset.mode === activeMode));
+    const pressed = el.dataset.mode === activePreference;
+    el.classList.toggle("active", pressed);
+    el.setAttribute("aria-pressed", String(pressed));
   });
+  const note = document.getElementById("modeNote");
+  if (note) {
+    note.hidden = activePreference !== "time";
+    note.textContent = note.hidden
+      ? ""
+      : `Light from ${formatHour(LIGHT_FROM_HOUR)} to ${formatHour(LIGHT_UNTIL_HOUR)}, ` +
+        `dark the rest of the day. It's ${resolvedMode} right now.`;
+  }
   updateThemeButtonIcon();
 }
 
