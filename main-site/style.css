@@ -485,6 +485,11 @@ body.modal-open { overflow: hidden; }
   .card-body {
     grid-template-columns: 1fr;
   }
+
+  /* On one column the empty preview would sit under the scanner doing nothing. */
+  .card-body.scanning .preview-section {
+    display: none;
+  }
 }
 
 /* PANELS */
@@ -647,6 +652,108 @@ textarea.field-input {
   word-break: break-all;
 }
 
+/* ── SCAN ── */
+.scan-view {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow var(--transition);
+}
+
+.scan-view.dragging {
+  box-shadow: 0 0 0 3px var(--brand-ink);
+}
+
+.scan-view video,
+.scan-view img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.scan-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 16px;
+}
+
+.scan-empty [data-icon] {
+  display: block;
+  margin: 0 auto 10px;
+  opacity: 0.4;
+}
+
+.scan-empty [data-icon] svg { width: 48px; height: 48px; }
+
+.scan-empty p {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.scan-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.scan-results:empty { display: none; }
+
+.scan-result {
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.scan-result-kind {
+  font-size: 0.82rem;
+  color: var(--brand-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.scan-result pre {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 140px;
+  overflow-y: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.scan-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scan-result-actions [data-icon] svg { width: 14px; height: 14px; }
+
+.scan-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.scan-note.error { color: var(--error); }
+
 /* ── MODALS ── */
 .modal-close {
   position: absolute;
@@ -719,7 +826,10 @@ textarea.field-input {
 
 .qr-card img {
   width: 100%;
+  aspect-ratio: 1;
   border-radius: 6px;
+  cursor: zoom-in;
+  background: var(--surface);
 }
 
 .qr-card-label {

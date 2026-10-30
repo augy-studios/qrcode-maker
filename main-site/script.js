@@ -8,6 +8,14 @@ document.querySelectorAll('.tab').forEach(btn => {
         btn.classList.add('active');
         activeTab = btn.dataset.tab;
         document.getElementById(`panel-${activeTab}`).classList.add('active');
+        // Scan has no fields to clear and nothing to draw until it reads one.
+        const scanning = activeTab === 'scan';
+        if (!scanning) stopCamera();
+        document.querySelector('.form-actions').style.display = scanning ? 'none' : '';
+        document.querySelector('.card-body').classList.toggle('scanning', scanning);
+        document.getElementById('qrPlaceholderText').innerHTML = scanning
+            ? 'Scan a code and it can<br />be made again here'
+            : 'Fill in the form to<br />generate your QR code';
         updateQR();
     });
 });
@@ -293,13 +301,397 @@ function fillForm(type, data) {
     showToast('Opened your saved code.');
 })();
 
+/* -- SCAN -- */
+/*
+ * The bot's /decode, in the page. A camera or an image goes in, every code in
+ * it comes out as text with a label, and one button puts that payload back in
+ * the editor as a code of its own, the way the bot's Rebuild button does.
+ *
+ * Reading happens here, never on a server. BarcodeDetector does it natively
+ * where the browser has it, and jsQR covers the rest, fetched only the first
+ * time it is needed.
+ */
+const SCAN_LABELS = {
+    url: 'Link',
+    text: 'Text',
+    wifi: 'WiFi network',
+    contact: 'Contact card',
+    calendar: 'Calendar event',
+};
+const SCAN_MAX_RESULTS = 5;
+
+let scanStream = null;
+let scanTimer = null;
+let scanImageUrl = null;
+let detectorPromise = null;
+let jsqrPromise = null;
+
+function scanLabel(data) {
+    // Same reading as the bot's detect_kind, which also counts mailto: and
+    // friends as links. detectType does not, because the URL tab cannot hold them.
+    if (/^(mailto|tel|sms|geo|bitcoin|matmsg):/i.test(data.trim())) return SCAN_LABELS.url;
+    return SCAN_LABELS[detectType(data)];
+}
+
+function getDetector() {
+    if (!detectorPromise) {
+        detectorPromise = (async () => {
+            if (!('BarcodeDetector' in window)) return null;
+            try {
+                const formats = await BarcodeDetector.getSupportedFormats();
+                return formats.includes('qr_code') ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+            } catch {
+                return null;
+            }
+        })();
+    }
+    return detectorPromise;
+}
+
+function getJsQR() {
+    if (!jsqrPromise) {
+        jsqrPromise = new Promise((resolve, reject) => {
+            if (window.jsQR) return resolve(window.jsQR);
+            const tag = document.createElement('script');
+            tag.src = '/jsqr.min.js';
+            tag.onload = () => resolve(window.jsQR);
+            tag.onerror = () => {
+                jsqrPromise = null;
+                reject(new Error('The QR reader would not load. Check your connection.'));
+            };
+            document.head.appendChild(tag);
+        });
+    }
+    return jsqrPromise;
+}
+
+/** Draw a source onto a canvas no larger than maxSide, scaling up by `scale` first. */
+function scanCanvas(source, width, height, maxSide, scale) {
+    const fit = Math.min(scale || 1, maxSide / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * fit));
+    canvas.height = Math.max(1, Math.round(height * fit));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    // A transparent PNG reads as black on black without a backing.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    return canvas;
+}
+
+function readWithJsQR(jsQR, canvas) {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const hit = jsQR(pixels.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+    return hit && hit.data ? [hit.data] : [];
+}
+
+/**
+ * Every payload in one still image. Mirrors the bot: one pass as it is, then a
+ * second at double size for a small image, which is where codes most often
+ * slip past.
+ */
+async function decodeStill(source, width, height) {
+    const detector = await getDetector();
+    if (detector) {
+        try {
+            const found = await detector.detect(source);
+            const payloads = [...new Set(found.map((f) => f.rawValue).filter(Boolean))];
+            if (payloads.length) return payloads;
+        } catch {
+            // Fall through to jsQR, which reads some images the native one will not.
+        }
+    }
+    const jsQR = await getJsQR();
+    let found = readWithJsQR(jsQR, scanCanvas(source, width, height, 1600));
+    if (!found.length && Math.max(width, height) < 1000) {
+        found = readWithJsQR(jsQR, scanCanvas(source, width, height, 2000, 2));
+    }
+    return found;
+}
+
+function scanNote(text, isError) {
+    const box = document.getElementById('scanResults');
+    box.innerHTML = text ? `<p class="scan-note${isError ? ' error' : ''}">${escHtml(text)}</p>` : '';
+}
+
+function showScanResults(payloads) {
+    const box = document.getElementById('scanResults');
+    if (!payloads.length) {
+        scanNote(
+            'No code found in that image. A flat, square, well lit shot reads best, ' +
+                'and a screenshot beats a photo taken at an angle.',
+            true
+        );
+        return;
+    }
+    const shown = payloads.slice(0, SCAN_MAX_RESULTS);
+    box.innerHTML =
+        shown
+            .map(
+                (payload, i) => `
+      <div class="scan-result">
+        <div class="scan-result-kind">${escHtml(scanLabel(payload))}</div>
+        <pre>${escHtml(payload.length <= 1200 ? payload : payload.slice(0, 1200) + '\n...')}</pre>
+        <div class="scan-result-actions">
+          <button class="btn-primary" type="button" data-scan-rebuild="${i}"><span data-icon="rebuild"></span> Rebuild it as a code</button>
+          <button class="btn-ghost" type="button" data-scan-copy="${i}"><span data-icon="copy"></span> Copy</button>
+        </div>
+      </div>`
+            )
+            .join('') +
+        (payloads.length > SCAN_MAX_RESULTS
+            ? `<p class="scan-note">That image held ${payloads.length} codes. The first ${SCAN_MAX_RESULTS} are above.</p>`
+            : '');
+    box.querySelectorAll('[data-scan-rebuild]').forEach((btn) => {
+        btn.addEventListener('click', () => rebuildScanned(shown[+btn.dataset.scanRebuild]));
+    });
+    box.querySelectorAll('[data-scan-copy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            await navigator.clipboard.writeText(shown[+btn.dataset.scanCopy]).catch(() => {});
+            showToast('Copied to clipboard!');
+        });
+    });
+    hydrateIcons(box);
+}
+
+/**
+ * Which tab can hold a payload without changing it. The form tabs only know
+ * the fields they show, so anything carrying more than that (a second phone
+ * number, an address, a time zone) goes to Text, where it is encoded exactly
+ * as it was read. A rebuilt code should scan the same as the one it came from.
+ */
+function rebuildTab(data) {
+    const type = detectType(data);
+    if (type === 'url') return /^https?:\/\//.test(data) ? 'url' : 'text';
+    if (type === 'wifi') {
+        const w = parseWifi(data);
+        const fits = Object.keys(w).every((k) => ['T', 'S', 'P', 'H'].includes(k));
+        const sec = Array.from(document.getElementById('wsec').options).some((o) => o.value === w.T);
+        return fits && sec && w.S ? 'wifi' : 'text';
+    }
+    if (type === 'contact' || type === 'calendar') {
+        const known =
+            type === 'contact'
+                ? ['BEGIN', 'VERSION', 'FN', 'N', 'ORG', 'TEL', 'EMAIL', 'URL', 'END']
+                : ['BEGIN', 'VERSION', 'UID', 'SUMMARY', 'DTSTART', 'DTEND', 'LOCATION', 'DESCRIPTION', 'END'];
+        const names = data
+            .replace(/\r?\n[ \t]/g, '')
+            .split(/\r?\n/)
+            .map((line) => line.slice(0, line.indexOf(':')).split(';')[0].toUpperCase())
+            .filter(Boolean)
+            .filter((n) => n !== 'BEGIN' && n !== 'END');
+        if (names.some((n) => !known.includes(n))) return 'text';
+        if (new Set(names).size !== names.length) return 'text';
+        if (type === 'calendar') {
+            const p = parseProperties(data);
+            const stamp = (v) => !v || /^\d{8}T\d{4}(\d{2})?$/.test(v.trim());
+            if (!p.SUMMARY || !stamp(p.DTSTART) || !stamp(p.DTEND)) return 'text';
+        }
+        return type;
+    }
+    return 'text';
+}
+
+function rebuildScanned(data) {
+    stopCamera();
+    const type = rebuildTab(data);
+    fillForm(type, data);
+    // The tab click redraws the code from the fields just filled.
+    document.querySelector(`.tab[data-tab="${type}"]`).click();
+    // A card with nothing but an organisation, say, leaves the contact form
+    // with nothing to draw. Text still can.
+    if (!currentData && type !== 'text') {
+        fillForm('text', data);
+        document.querySelector('.tab[data-tab="text"]').click();
+    }
+    document.querySelector('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast(
+        activeTab === 'text' && detectType(data) !== 'text'
+            ? 'Rebuilt as text, so nothing in it is lost.'
+            : 'Rebuilt. Edit it, download it or save it.'
+    );
+}
+
+function showScanSurface(which) {
+    document.getElementById('scanVideo').hidden = which !== 'video';
+    document.getElementById('scanImage').hidden = which !== 'image';
+    document.getElementById('scanEmpty').hidden = which !== 'empty';
+}
+
+function setCameraBtn(on) {
+    const btn = document.getElementById('scanCameraBtn');
+    btn.innerHTML = on
+        ? '<span data-icon="close"></span> Stop camera'
+        : '<span data-icon="camera"></span> Use camera';
+    hydrateIcons(btn);
+}
+
+function stopCamera() {
+    clearTimeout(scanTimer);
+    scanTimer = null;
+    if (!scanStream) return;
+    scanStream.getTracks().forEach((t) => t.stop());
+    scanStream = null;
+    const video = document.getElementById('scanVideo');
+    video.srcObject = null;
+    showScanSurface(scanImageUrl ? 'image' : 'empty');
+    setCameraBtn(false);
+}
+
+async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        scanNote('This browser cannot open a camera here. Choose an image instead.', true);
+        return;
+    }
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false,
+        });
+    } catch (e) {
+        scanStream = null;
+        scanNote(
+            e && e.name === 'NotAllowedError'
+                ? 'Camera access was refused. Allow it in the browser settings, or choose an image instead.'
+                : 'No camera could be opened. Choose an image instead.',
+            true
+        );
+        return;
+    }
+    // The tab may have changed while the permission prompt was up.
+    if (activeTab !== 'scan') return stopCamera();
+
+    const video = document.getElementById('scanVideo');
+    video.srcObject = scanStream;
+    showScanSurface('video');
+    setCameraBtn(true);
+    scanNote('Looking for a code...');
+    await video.play().catch(() => {});
+
+    // One look every few hundred milliseconds is plenty, and keeps a phone cool.
+    const tick = async () => {
+        if (!scanStream) return;
+        if (video.readyState >= 2 && video.videoWidth) {
+            let found = [];
+            try {
+                const detector = await getDetector();
+                if (detector) {
+                    found = (await detector.detect(video)).map((f) => f.rawValue).filter(Boolean);
+                } else {
+                    const jsQR = await getJsQR();
+                    found = readWithJsQR(jsQR, scanCanvas(video, video.videoWidth, video.videoHeight, 800));
+                }
+            } catch (e) {
+                stopCamera();
+                scanNote(e.message || 'Reading failed.', true);
+                return;
+            }
+            if (!scanStream) return;
+            if (found.length) {
+                stopCamera();
+                if (navigator.vibrate) navigator.vibrate(60);
+                showScanResults([...new Set(found)]);
+                return;
+            }
+        }
+        scanTimer = setTimeout(tick, 250);
+    };
+    tick();
+}
+
+async function scanFile(file) {
+    if (!file || !(file.type || '').startsWith('image/')) {
+        scanNote('That is not an image. Choose a photo or a screenshot of a code.', true);
+        return;
+    }
+    stopCamera();
+    if (scanImageUrl) URL.revokeObjectURL(scanImageUrl);
+    scanImageUrl = URL.createObjectURL(file);
+
+    const img = document.getElementById('scanImage');
+    img.src = scanImageUrl;
+    showScanSurface('image');
+    scanNote('Reading...');
+    try {
+        await img.decode();
+        showScanResults(await decodeStill(img, img.naturalWidth, img.naturalHeight));
+    } catch (e) {
+        scanNote(e && e.message && e.name !== 'EncodingError' ? e.message : 'That image would not open.', true);
+    }
+}
+
+document.getElementById('scanCameraBtn').addEventListener('click', () => {
+    if (scanStream) stopCamera();
+    else startCamera();
+});
+
+document.getElementById('scanFileBtn').addEventListener('click', () => {
+    document.getElementById('scanFile').click();
+});
+
+document.getElementById('scanFile').addEventListener('change', (e) => {
+    scanFile(e.target.files[0]);
+    // The same file picked twice is still worth reading twice.
+    e.target.value = '';
+});
+
+(() => {
+    const view = document.getElementById('scanView');
+    const panel = document.getElementById('panel-scan');
+    panel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        view.classList.add('dragging');
+    });
+    panel.addEventListener('dragleave', (e) => {
+        if (!panel.contains(e.relatedTarget)) view.classList.remove('dragging');
+    });
+    panel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        view.classList.remove('dragging');
+        scanFile(e.dataTransfer.files[0]);
+    });
+})();
+
+document.addEventListener('paste', (e) => {
+    if (activeTab !== 'scan' || !e.clipboardData) return;
+    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith('image/'));
+    if (!item) return;
+    e.preventDefault();
+    scanFile(item.getAsFile());
+});
+
+// A camera left running in a background tab is a camera light left on.
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopCamera();
+});
+
+/* -- IMAGES AS BLOBS -- */
+/*
+ * Every QR image the page hands over, to look at or to keep, goes out as a
+ * blob: URL made here. Opened in a new tab or saved, what shows is
+ * blob:<this site>/<random id>, never the storage address the account's codes
+ * live at, and the download keeps its name, which a cross origin link cannot.
+ */
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Some browsers start the download after the click returns.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 /* -- DOWNLOAD -- */
 document.getElementById('downloadBtn').addEventListener('click', () => {
     const canvas = document.getElementById('qrCanvas');
-    const a = document.createElement('a');
-    a.download = `qr-${activeTab}-${Date.now()}.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
+    canvas.toBlob((blob) => {
+        if (!blob) return showToast('That code would not export. Try again.');
+        saveBlob(blob, `qr-${activeTab}-${Date.now()}.png`);
+    }, 'image/png');
 });
 
 /* -- COPY DATA -- */
@@ -620,21 +1012,65 @@ document.getElementById('deviceQrBtn').addEventListener('click', () => {
     openModal('myQrModal');
 });
 
+// Object URLs behind the cards on screen, let go each time the grid redraws.
+let cardBlobUrls = [];
+
+function releaseCardBlobs() {
+    cardBlobUrls.forEach((url) => URL.revokeObjectURL(url));
+    cardBlobUrls = [];
+}
+
 function renderQrCards(grid, cards) {
+    releaseCardBlobs();
+    // The real address is never written into the page. Each image is fetched
+    // and shown through a blob: URL of its own.
     grid.innerHTML = cards
         .map(
             (c) => `
       <div class="qr-card" data-id="${escHtml(c.id)}">
-        <img src="${c.image}" alt="QR Code" loading="lazy" />
+        <img alt="QR Code" title="Open image" />
         <div class="qr-card-label">${escHtml(c.label)}</div>
         <div class="qr-card-actions">
-          <a href="${c.image}" download="qr-${escHtml(c.id)}.png" class="btn-ghost" aria-label="Download"><span data-icon="download"></span></a>
+          <button class="btn-ghost" type="button" data-card-download aria-label="Download"><span data-icon="download"></span></button>
           <button class="btn-ghost" onclick="deleteQR('${escHtml(c.id)}')" aria-label="Delete"><span data-icon="trash"></span></button>
         </div>
       </div>`
         )
         .join('');
     hydrateIcons(grid);
+
+    grid.querySelectorAll('.qr-card').forEach((el, i) => {
+        const card = cards[i];
+        const img = el.querySelector('img');
+        // Started now, so the image is usually there before anyone presses.
+        const blob = fetch(card.image)
+            .then((r) => {
+                if (!r.ok) throw new Error(r.status);
+                return r.blob();
+            })
+            .then((b) => {
+                const url = URL.createObjectURL(b);
+                cardBlobUrls.push(url);
+                img.src = url;
+                return { blob: b, url };
+            });
+        blob.catch(() => {
+            img.alt = 'Image unavailable';
+        });
+
+        img.addEventListener('click', () => {
+            // Opened straight from the click once loaded, so no popup blocker
+            // mistakes it for something the page did on its own.
+            if (img.src) return window.open(img.src, '_blank');
+            showToast('Still loading that image.');
+        });
+        el.querySelector('[data-card-download]').addEventListener('click', () => {
+            blob.then(
+                (b) => saveBlob(b.blob, `qr-${card.id}.png`),
+                () => showToast('That image could not be loaded.')
+            );
+        });
+    });
 }
 
 function setMyQrNote(text) {
