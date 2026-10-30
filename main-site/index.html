@@ -136,6 +136,10 @@
                     <span data-icon="calendar"></span>
                     Event
                 </button>
+                <button class="tab" data-tab="scan" role="tab">
+                    <span data-icon="scan"></span>
+                    Scan
+                </button>
             </div>
 
             <div class="card-body">
@@ -218,6 +222,32 @@
                         <input class="field-input" id="curl" type="url" placeholder="https://example.com" />
                     </div>
 
+                    <!-- SCAN PANEL -->
+                    <div class="panel" id="panel-scan">
+                        <label class="field-label">Read a QR code</label>
+                        <div class="scan-view glass" id="scanView">
+                            <video id="scanVideo" playsinline muted hidden></video>
+                            <img id="scanImage" alt="The image being read" hidden />
+                            <div class="scan-empty" id="scanEmpty">
+                                <span data-icon="scan"></span>
+                                <p>Point your camera at a code,<br />or choose an image of one.</p>
+                            </div>
+                        </div>
+                        <div class="scan-actions">
+                            <button class="btn-primary" id="scanCameraBtn" type="button">
+                                <span data-icon="camera"></span>
+                                Use camera
+                            </button>
+                            <button class="btn-ghost" id="scanFileBtn" type="button">
+                                <span data-icon="image"></span>
+                                Choose image
+                            </button>
+                            <input id="scanFile" type="file" accept="image/*" hidden />
+                        </div>
+                        <p class="field-hint">You can also drop or paste an image here. A screenshot beats a photo taken at an angle.</p>
+                        <div class="scan-results" id="scanResults"></div>
+                    </div>
+
                     <div class="form-actions">
                         <button class="btn-ghost" id="clearBtn">Clear</button>
                     </div>
@@ -228,7 +258,7 @@
                     <div class="qr-frame glass" id="qrFrame">
                         <div class="qr-placeholder" id="qrPlaceholder">
                             <span data-icon="qr"></span>
-                            <p>Fill in the form to<br />generate your QR code</p>
+                            <p id="qrPlaceholderText">Fill in the form to<br />generate your QR code</p>
                         </div>
                         <canvas id="qrCanvas" style="display:none"></canvas>
                     </div>
@@ -425,6 +455,8 @@
     <script src="/js/theme.js"></script>
 
     <script src="/qrcode.min.js"></script>
+    <!-- jsQR (/jsqr.min.js) is loaded by script.js only when a browser has no
+         BarcodeDetector of its own. -->
 
     <script src="/script.js"></script>
 
