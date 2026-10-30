@@ -1,7 +1,7 @@
 // Bump on every change to anything this worker serves. It is the whole update
 // trigger: the browser only sees a new worker, and the page only shows the
 // "new version" bar, when this file's bytes change.
-const VERSION = "v10";
+const VERSION = "v11";
 const CACHE = `uwuqr-${VERSION}`;
 
 // Survives version bumps: Google Fonts, and the last "My QRs" list per session

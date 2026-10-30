@@ -1012,6 +1012,12 @@ document.getElementById('deviceQrBtn').addEventListener('click', () => {
     openModal('myQrModal');
 });
 
+async function fetchBlob(url, options) {
+    const r = await fetch(url, options);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.blob();
+}
+
 // Object URLs behind the cards on screen, let go each time the grid redraws.
 let cardBlobUrls = [];
 
@@ -1022,8 +1028,8 @@ function releaseCardBlobs() {
 
 function renderQrCards(grid, cards) {
     releaseCardBlobs();
-    // The real address is never written into the page. Each image is fetched
-    // and shown through a blob: URL of its own.
+    // Each card brings a load() that resolves to the PNG as a Blob, and the
+    // page only ever shows it through a blob: URL of its own.
     grid.innerHTML = cards
         .map(
             (c) => `
@@ -1043,11 +1049,8 @@ function renderQrCards(grid, cards) {
         const card = cards[i];
         const img = el.querySelector('img');
         // Started now, so the image is usually there before anyone presses.
-        const blob = fetch(card.image)
-            .then((r) => {
-                if (!r.ok) throw new Error(r.status);
-                return r.blob();
-            })
+        const blob = card
+            .load()
             .then((b) => {
                 const url = URL.createObjectURL(b);
                 cardBlobUrls.push(url);
@@ -1099,7 +1102,7 @@ async function loadMyQRs() {
             list
                 .slice()
                 .reverse()
-                .map((f) => ({ id: f.id, image: f.image, label: f.data.slice(0, 80) }))
+                .map((f) => ({ id: f.id, load: () => fetchBlob(f.image), label: f.data.slice(0, 80) }))
         );
         return;
     }
@@ -1116,7 +1119,16 @@ async function loadMyQRs() {
         }
         renderQrCards(
             grid,
-            data.qrs.map((q) => ({ id: q.id, image: q.image_url, label: q.data_preview }))
+            data.qrs.map((q) => ({
+                id: q.id,
+                // Sent by the server itself, so the list never carries where
+                // the image is stored.
+                load: () =>
+                    fetchBlob(`/api/qr-image?id=${encodeURIComponent(q.id)}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                label: q.data_preview,
+            }))
         );
     } catch {
         grid.innerHTML = '<p class="empty-state">Failed to load.</p>';

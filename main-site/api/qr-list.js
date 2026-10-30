@@ -16,9 +16,11 @@ export default async function handler(req, res) {
         return err(res, e.message, e.status || 401);
     }
 
+    // No image_url. The picture comes from /api/qr-image by id, so the
+    // storage address never leaves the server.
     const { data: qrs, error } = await supabase
         .from('qr_codes')
-        .select('id, type, data_preview, image_url, created_at')
+        .select('id, type, data_preview, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
